@@ -15,7 +15,7 @@ export 'mongo_listener.dart';
 class MongoRealtime {
   static late MongoRealtime instance;
 
-  final Socket socket;
+  late final Socket socket;
   final List<MongoListener> _listeners = [];
   final bool _showLogs;
 
@@ -24,12 +24,27 @@ class MongoRealtime {
   /// Listens for events prefixed with `db:` and routes them to matching listeners.
   MongoRealtime(
     String url, {
+    String? token,
+    Map<String, dynamic>? headers,
+    Map<String, dynamic>? authData,
     bool showLogs = true,
+    bool autoConnect = false,
     void Function(dynamic data)? onConnect,
     void Function(dynamic reason)? onDisconnect,
     void Function(dynamic error)? onError,
-  }) : socket = io(url, OptionBuilder().setTransports(['websocket']).build()),
-       _showLogs = showLogs {
+    void Function(dynamic error)? onConnectError,
+  }) : _showLogs = showLogs {
+    OptionBuilder optionBuilder = OptionBuilder()
+        .setTransports(['websocket'])
+        .setAuth({'token': token, ...?authData})
+        .setExtraHeaders(headers ?? {});
+
+    if (!autoConnect) {
+      optionBuilder = optionBuilder.disableAutoConnect();
+    }
+
+    socket = io(url, optionBuilder.build());
+
     socket.onConnect((data) {
       _log("Connected", PrintType.success);
       if (onConnect != null) onConnect(data);
@@ -45,6 +60,11 @@ class MongoRealtime {
       if (onError != null) onError(error);
     });
 
+    socket.onConnectError((error) {
+      _log("Cannot connect ($error)", PrintType.error);
+      if (onConnectError != null) onConnectError(error);
+    });
+
     // Catch all db-related events and forward to matching listeners
     socket.onAny((event, data) {
       if (!event.startsWith('db:')) return;
@@ -56,6 +76,35 @@ class MongoRealtime {
         listener.call(change);
       }
     });
+  }
+
+  /// Initializes and stores the singleton instance of [MongoRealtime].
+  static MongoRealtime init(
+    String url, {
+    String? token,
+    Map<String, dynamic>? headers,
+    Map<String, dynamic>? authData,
+    void Function(dynamic data)? onConnect,
+    void Function(dynamic reason)? onDisconnect,
+    void Function(dynamic error)? onError,
+    void Function(dynamic error)? onConnectError,
+    bool showLogs = true,
+    bool autoConnect = false,
+  }) {
+    instance = MongoRealtime(
+      url,
+      token: token,
+      headers: headers,
+      onConnect: onConnect,
+      onDisconnect: onDisconnect,
+      onError: onError,
+      authData: authData,
+      autoConnect: autoConnect,
+      onConnectError: onConnectError,
+      showLogs: showLogs,
+    );
+
+    return instance;
   }
 
   /// Creates and registers a new [MongoListener] for a list of [events].
@@ -104,23 +153,17 @@ class MongoRealtime {
     return ev;
   }
 
-  /// Initializes and stores the singleton instance of [MongoRealtime].
-  static MongoRealtime init(
-    String url, {
-    void Function(dynamic data)? onConnect,
-    void Function(dynamic reason)? onDisconnect,
-    void Function(dynamic error)? onError,
-    bool showLogs = true,
-  }) {
-    instance = MongoRealtime(
-      url,
-      onConnect: onConnect,
-      onDisconnect: onDisconnect,
-      onError: onError,
-      showLogs: showLogs,
-    );
+  void refreshAuthToken(String newToken) {
+    socket.auth.token = newToken;
+    reconnect();
+  }
 
-    return instance;
+  void connect() {
+    socket.connect();
+  }
+
+  void reconnect() {
+    socket.disconnect().connect();
   }
 
   /// Listens for changes on a specific collection or document.
@@ -171,3 +214,5 @@ class MongoRealtime {
     return _createListener(events: events, callback: callback);
   }
 }
+
+MongoRealtime get realtime => MongoRealtime.instance;

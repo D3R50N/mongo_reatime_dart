@@ -60,16 +60,32 @@ import 'package:mongo_realtime/mongo_realtime.dart';
 void main() async {
   MongoRealtime.init("http://my_server:server_port", showLogs: false);
 
-  // After calling init(), you can use MongoRealtime.instance
+  // After calling init(), you can use MongoRealtime.instance or the getter 'realtime'
 
   final listener = MongoRealtime.instance.onDbChange(
     callback: (change) => print("Change: ${change.collection}"),
   );
 
+  // connect to the server when autoConnect is false
+  MongoRealtime.instance.connect(); // or realtime.connect();
+
   // Stop listening:
   listener.cancel();
 }
 ```
+
+#### Using auth token
+
+```dart
+MongoRealtime.init(
+  "http://my_server:server_port",
+  token : "my_jwt_token", // or any string
+  autoConnect: true, // default is false
+  authData: {"role": "admin"}, // optional additional data
+);
+```
+
+This will send the token to the server before connecting. The server can then verify it and accept or reject the connection.
 
 #### Using multiple instances
 
@@ -101,8 +117,6 @@ devServer.onColChange(
 #### Specific use cases
 
 ```dart
-final realtime = MongoRealtime.instance;
-
 //  Listeners
 realtime.onColChange(
   "users",
@@ -123,8 +137,6 @@ realtime.onDbChange(
 #### Using streams instead of callback
 
 ```dart
-final realtime = MongoRealtime.instance;
-
 void doSomething(change) {}
 void doSomethingOnStream(change) {}
 
@@ -144,8 +156,6 @@ listener.stream.listen(doSomethingOnStream);
 You can listen to any event (even [db events](#db-events)) on the socket juste like with socket.io
 
 ```dart
-final realtime = MongoRealtime.instance;
-
 realtime.socket.on("custom-event", (data) {}); 
 realtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
 ```
