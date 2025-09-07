@@ -37,49 +37,40 @@ class MongoRealtime {
     OptionBuilder optionBuilder = OptionBuilder()
         .setTransports(['websocket'])
         .setAuth({'token': token, ...?authData})
-        .enableForceNew()
-        .enableForceNewConnection()
-        .disableMultiplex()
-        .disableReconnection()
+        .disableAutoConnect()
         .setExtraHeaders(headers ?? {});
-
-    if (!autoConnect) {
-      optionBuilder = optionBuilder.disableAutoConnect();
-    }
 
     socket = io(url, optionBuilder.build());
 
-    socket.onConnect((data) {
-      _log("Connected", PrintType.success);
-      if (onConnect != null) onConnect(data);
-    });
+    socket
+      ..onConnect((data) {
+        _log("Connected", PrintType.success);
+        if (onConnect != null) onConnect(data);
+      })
+      ..onDisconnect((reason) {
+        _log("Disconnected ($reason)", PrintType.warning);
+        if (onDisconnect != null) onDisconnect(reason);
+      })
+      ..onError((error) {
+        _log("Error ($error)", PrintType.error);
+        if (onError != null) onError(error);
+      })
+      ..onConnectError((error) {
+        _log("Cannot connect ($error)", PrintType.error);
+        if (onConnectError != null) onConnectError(error);
+      })
+      ..onAny((event, data) {
+        if (!event.startsWith('db:')) return;
+        _log("Received '$event'");
+        for (final listener in _listeners.where(
+          (l) => l.events.contains(event),
+        )) {
+          final change = MongoChange.fromJson(data);
+          listener.call(change);
+        }
+      });
 
-    socket.onDisconnect((reason) {
-      _log("Disconnected ($reason)", PrintType.warning);
-      if (onDisconnect != null) onDisconnect(reason);
-    });
-
-    socket.onError((error) {
-      _log("Error ($error)", PrintType.error);
-      if (onError != null) onError(error);
-    });
-
-    socket.onConnectError((error) {
-      _log("Cannot connect ($error)", PrintType.error);
-      if (onConnectError != null) onConnectError(error);
-    });
-
-    // Catch all db-related events and forward to matching listeners
-    socket.onAny((event, data) {
-      if (!event.startsWith('db:')) return;
-      _log("Received '$event'");
-      for (final listener in _listeners.where(
-        (l) => l.events.contains(event),
-      )) {
-        final change = MongoChange.fromJson(data);
-        listener.call(change);
-      }
-    });
+    if (autoConnect) connect();
   }
 
   /// Initializes and stores the singleton instance of [MongoRealtime].
@@ -111,63 +102,33 @@ class MongoRealtime {
     return instance;
   }
 
-  /// Creates and registers a new [MongoListener] for a list of [events].
-  MongoListener _createListener({
-    List<String> events = const [],
-    void Function(MongoChange change)? callback,
-  }) {
-    final controller = StreamController<MongoChange>();
-    final listener = MongoListener(
-      events: events,
-      callback: callback,
-      controller: controller,
-    );
-
-    // Set up cancellation logic
-    listener.cancel = () {
-      _listeners.removeWhere((l) => l.id == listener.id);
-      controller.close();
-    };
-
-    _listeners.add(listener);
-
-    return listener;
-  }
-
-  /// Logs a message to the console if [_showLogs] is enabled.
-  void _log(String message, [PrintType? type]) {
-    if (_showLogs) {
-      Printer(type).write("[${"SOCKET ${socket.id ?? ""}".trim()}] $message");
-    }
-  }
-
-  /// Builds a full event name from optional collection, document, and change type.
-  ///
-  /// Format: `db:<type>:<collection>:<docId>`
-  String _buildEventName({
-    String? collection,
-    String? docId,
-    MongoChangeType? type,
-  }) {
-    String ev = "db:";
-    ev += type == null ? "change" : type.name;
-    if (collection != null) ev += ":$collection";
-    if (docId != null) ev += ":$docId";
-
-    return ev;
-  }
-
+  /// Refresh auth token and reconnect
   void refreshAuthToken(String newToken) {
     socket.auth.token = newToken;
     reconnect();
   }
 
-  void connect() {
-    socket.connect();
+  /// Try to connect [retries] times within each [interval]
+  Future<bool> forceConnect([
+    int retries = 10,
+    Duration interval = const Duration(seconds: 1),
+  ]) async {
+    for (var i = 0; i < retries; i++) {
+      if (_connect(i + 1)) return true;
+      await Future.delayed(interval);
+    }
+    return false;
   }
 
-  void reconnect() {
+  /// Connect manually the socket
+  bool connect() {
+    return _connect();
+  }
+
+  /// Reconnect the socket after disconnecting it.
+  bool reconnect() {
     socket.disconnect().connect();
+    return socket.connected;
   }
 
   /// Listens for changes on a specific collection or document.
@@ -216,6 +177,63 @@ class MongoRealtime {
     }
 
     return _createListener(events: events, callback: callback);
+  }
+
+  /// Creates and registers a new [MongoListener] for a list of [events].
+  MongoListener _createListener({
+    List<String> events = const [],
+    void Function(MongoChange change)? callback,
+  }) {
+    final controller = StreamController<MongoChange>();
+    final listener = MongoListener(
+      events: events,
+      callback: callback,
+      controller: controller,
+    );
+
+    // Set up cancellation logic
+    listener.cancel = () {
+      _listeners.removeWhere((l) => l.id == listener.id);
+      controller.close();
+    };
+
+    _listeners.add(listener);
+
+    return listener;
+  }
+
+  /// Logs a message to the console if [_showLogs] is enabled.
+  void _log(String message, [PrintType? type]) {
+    if (_showLogs) {
+      Printer(type).write("[${"SOCKET ${socket.id ?? ""}".trim()}] $message");
+    }
+  }
+
+  /// Builds a full event name from optional collection, document, and change type.
+  ///
+  /// Format: `db:<type>:<collection>:<docId>`
+  String _buildEventName({
+    String? collection,
+    String? docId,
+    MongoChangeType? type,
+  }) {
+    String ev = "db:";
+    ev += type == null ? "change" : type.name;
+    if (collection != null) ev += ":$collection";
+    if (docId != null) ev += ":$docId";
+
+    return ev;
+  }
+
+  bool _connect([int? attempt]) {
+    if (attempt != null) {
+      _log('Connection attempt $attempt');
+    }
+    socket.connect();
+    if (!socket.connected) {
+      socket.emitReserved('connect_error', 'Connection refused');
+    }
+    return socket.connected;
   }
 }
 
