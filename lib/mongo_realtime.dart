@@ -37,6 +37,10 @@ class MongoRealtime {
     OptionBuilder optionBuilder = OptionBuilder()
         .setTransports(['websocket'])
         .setAuth({'token': token, ...?authData})
+        .setRetries(2)
+        .setReconnectionDelay(500)
+        .setReconnectionDelayMax(500)
+        .setReconnectionAttempts(2)
         .setExtraHeaders(headers ?? {});
 
     if (!autoConnect) {

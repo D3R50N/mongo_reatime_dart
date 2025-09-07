@@ -2,7 +2,8 @@ import 'package:mongo_realtime/mongo_realtime.dart';
 
 void main() async {
   MongoRealtime.init(
-    'ws://localhost:3000',
+    'ws://192.168.48.8:41366',
+    autoConnect: true,
     onConnectError: (data) {
       print("oups");
     },
@@ -19,4 +20,12 @@ void main() async {
 
   realtime.socket.on("custom-event", (data) {});
   realtime.socket.on("db:insert:users:1234", (data) {});
+
+  await Future.delayed(Duration(seconds: 2));
+  realtime.connect();
+  await Future.delayed(Duration(seconds: 2));
+  realtime.connect();
+  await Future.delayed(Duration(seconds: 10));
+
+  realtime.reconnect();
 }
