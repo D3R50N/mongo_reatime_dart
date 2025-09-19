@@ -1,14 +1,151 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
+// ignore_for_file: library_private_types_in_public_api
+
 import 'dart:async';
 
+import 'package:mongo_realtime/core/uuid.dart';
 import 'package:socket_io_client/socket_io_client.dart';
 
 import 'core/printer.dart';
-import 'mongo_change.dart';
-import 'mongo_listener.dart';
 
 export 'core/uuid.dart';
-export 'mongo_change.dart';
-export 'mongo_listener.dart';
+
+/// Enum representing the possible types of MongoDB change events.
+enum MongoChangeType { insert, update, delete, replace, invalidate, drop }
+
+class _MongoChange {
+  /// The operation type as a string (e.g. "insert", "update", etc.)
+  final String operationType;
+
+  /// The collection where the change occurred.
+  final String collection;
+
+  /// The ID of the affected document.
+  final String documentId;
+
+  /// The full document after the change (only present in some change types).
+  final Map<String, dynamic>? doc;
+
+  /// Details about the fields that were updated or removed (for updates).
+  final Map<String, dynamic>? updateDescription;
+
+  /// The raw payload of the change event.
+  final Map<String, dynamic> raw;
+
+  /// The typed version of the operationType string.
+  MongoChangeType get type =>
+      MongoChangeType.values.firstWhere((v) => v.name == operationType);
+
+  _MongoChange({
+    required this.operationType,
+    required this.collection,
+    required this.documentId,
+    this.doc,
+    this.updateDescription,
+    required this.raw,
+  });
+
+  /// Creates a [_MongoChange] instance from a raw JSON change payload.
+  ///
+  /// Tries to extract the collection and document ID from either:
+  /// - `col`
+  /// - `ns.coll`
+  /// - `documentKey._id`
+  ///
+  /// Handles optional presence of `fullDocument` and `updateDescription`.
+  factory _MongoChange.fromJson(Map<String, dynamic> json) {
+    return _MongoChange(
+      operationType: json['operationType'] ?? "update",
+      collection: json['col'] ?? json['ns']?['coll'] ?? '',
+      documentId:
+          json['docId'] ?? json['documentKey']?['_id']?.toString() ?? '',
+      doc:
+          json['fullDocument'] != null
+              ? Map<String, dynamic>.from(json['fullDocument'])
+              : null,
+      updateDescription:
+          json['updateDescription'] != null
+              ? Map<String, dynamic>.from(json['updateDescription'])
+              : null,
+      raw: json,
+    );
+  }
+
+  /// Whether this change event is an `insert`.
+  bool get isInsert => type == MongoChangeType.insert;
+
+  /// Whether this change event is an `update`.
+  bool get isUpdate => type == MongoChangeType.update;
+
+  /// Whether this change event is a `delete`.
+  bool get isDelete => type == MongoChangeType.delete;
+
+  /// Whether this change event is a `replace`.
+  bool get isReplace => type == MongoChangeType.replace;
+
+  /// Whether this change event is an `invalidate` (e.g. stream invalidated).
+  bool get isInvalidate => type == MongoChangeType.invalidate;
+
+  /// Whether this change event is a `drop` (e.g. collection dropped).
+  bool get isDrop => type == MongoChangeType.drop;
+
+  /// Fields that were updated (only for update events).
+  Map<String, dynamic>? get updatedFields =>
+      updateDescription?['updatedFields'] as Map<String, dynamic>?;
+
+  /// Fields that were removed (only for update events).
+  List<String>? get removedFields =>
+      (updateDescription?['removedFields'] as List?)?.cast<String>();
+
+  @override
+  String toString() {
+    return '_MongoChange(type: $operationType, col: $collection, docId: $documentId)';
+  }
+}
+
+/// A listener that reacts to MongoDB change events.
+///
+/// Each listener has a unique [_id], a list of [events] it listens to,
+/// and optionally a [_callback] and a [stream] to emit changes.
+class _MongoListener {
+  /// Unique identifier for the listener (generated with `Uuid.long`).
+  final String _id = Uuid.long(3, 12);
+
+  /// List of event names this listener is interested in.
+  final List<String> _events;
+
+  /// Optional callback function invoked when a matching change is received.
+  final void Function(_MongoChange change)? _callback;
+
+  /// Optional function to remove/unsubscribe this listener.
+  void Function() cancel = () {};
+
+  final StreamController<_MongoChange> _controller;
+
+  /// Stream that emits changes received by this listener.
+  Stream<_MongoChange> get stream => _controller.stream;
+
+  /// Creates a [_MongoListener] instance.
+  ///
+  /// [_events] can be used to scope what types of changes to listen for.
+  /// [callback] is triggered alongside pushing the change into the stream.
+  _MongoListener({
+    List<String> events = const [],
+    void Function(_MongoChange change)? callback,
+    required StreamController<_MongoChange> controller,
+  }) : _controller = controller,
+       _events = events,
+       _callback = callback;
+
+  /// Emits a [_MongoChange] to the stream and invokes the callback if defined.
+  void call(_MongoChange change) {
+    _controller.add(change);
+    if (_callback != null) _callback(change);
+  }
+
+  @override
+  String toString() => '_MongoListener(id: $_id, events: $_events)';
+}
 
 /// A singleton-like service that connects to a backend via WebSocket
 /// and dispatches MongoDB change events to listeners based on event names.
@@ -16,7 +153,7 @@ class MongoRealtime {
   static late MongoRealtime instance;
 
   late final Socket socket;
-  final List<MongoListener> _listeners = [];
+  final List<_MongoListener> _listeners = [];
   final bool _showLogs;
 
   /// Creates and connects the MongoRealtime client.
@@ -72,15 +209,22 @@ class MongoRealtime {
     // Catch all db-related events and forward to matching listeners
     socket.onAny((event, data) {
       if (!event.startsWith('db:')) return;
-      _log("Received '$event'");
+      // _log("Received '$event'");
       for (final listener in _listeners.where(
-        (l) => l.events.contains(event),
+        (l) => l._events.contains(event),
       )) {
-        final change = MongoChange.fromJson(data);
+        final change = _MongoChange.fromJson(data);
         listener.call(change);
       }
     });
   }
+
+
+  _MongoRealtimeDB db([List<String?> collections = const []]) =>
+      _MongoRealtimeDB(this, collections);
+
+  _MongoRealtimeCol col(String collection) =>
+      _MongoRealtimeCol(this, collection);
 
   /// Initializes and stores the singleton instance of [MongoRealtime].
   static MongoRealtime init(
@@ -111,13 +255,79 @@ class MongoRealtime {
     return instance;
   }
 
-  /// Creates and registers a new [MongoListener] for a list of [events].
-  MongoListener _createListener({
-    List<String> events = const [],
-    void Function(MongoChange change)? callback,
+  /// Returns a stream of lists containing raw documents (`Map<String, dynamic>`).
+  ///
+  /// This is a convenience wrapper around [listStreamMapped] when no mapping is
+  /// needed and the documents should be used as-is.
+  ///
+  /// Example:
+  /// ```dart
+  /// final stream = MongoRealtime().listStream("users");
+  /// stream.listen((users) {
+  ///   print(users); // List<Map<String, dynamic>>
+  /// });
+  /// ```
+  Stream<List<Map<String, dynamic>>> listStream(
+    String streamId, {
+    bool Function(Map<String, dynamic> doc)? filter,
   }) {
-    final controller = StreamController<MongoChange>();
-    final listener = MongoListener(
+    return listStreamMapped<Map<String, dynamic>>(
+      streamId,
+      filter: filter,
+      fromMap: (d) => d,
+    );
+  }
+
+  /// Returns a stream of lists containing strongly-typed objects of type [T].
+  ///
+  /// Each document received from the socket is first converted from a
+  /// `Map<String, dynamic>` using the provided [fromMap] function.
+  /// You can also provide an optional [filter] function to exclude items from
+  /// the list before it is emitted.
+  ///
+  /// Example:
+  /// ```dart
+  /// final stream = MongoRealtime().listStreamMapped<User>(
+  ///   "users",
+  ///   fromMap: (doc) => User.fromJson(doc),
+  ///   filter: (user) => user.age > 18,
+  /// );
+  ///
+  /// stream.listen((users) {
+  ///   print(users); // List<User> with age > 18
+  /// });
+  /// ```
+  ///
+  /// - [streamId]: Identifier of the stream (used in the socket event).
+  /// - [fromMap]: A function that converts a raw document (`Map<String, dynamic>`)
+  ///   into an instance of type [T].
+  /// - [filter]: An optional function to include/exclude items from the list.
+  Stream<List<T>> listStreamMapped<T>(
+    String streamId, {
+    required T Function(Map<String, dynamic> doc) fromMap,
+    bool Function(T value)? filter,
+  }) {
+    StreamController<List<T>> controller = StreamController();
+    socket.on("db:stream:$streamId", (d) {
+      List<T> list =
+          (d as List)
+              .map((e) => fromMap(e as Map<String, dynamic>))
+              .where((v) => filter?.call(v) ?? true)
+              .toList();
+
+      controller.add(list);
+    });
+
+    return controller.stream;
+  }
+
+  /// Creates and registers a new [_MongoListener] for a list of [events].
+  _MongoListener _createListener({
+    List<String> events = const [],
+    void Function(_MongoChange change)? callback,
+  }) {
+    final controller = StreamController<_MongoChange>();
+    final listener = _MongoListener(
       events: events,
       callback: callback,
       controller: controller,
@@ -125,7 +335,7 @@ class MongoRealtime {
 
     // Set up cancellation logic
     listener.cancel = () {
-      _listeners.removeWhere((l) => l.id == listener.id);
+      _listeners.removeWhere((l) => l._id == listener._id);
       controller.close();
     };
 
@@ -169,54 +379,98 @@ class MongoRealtime {
   void reconnect() {
     socket.disconnect().connect();
   }
-
-  /// Listens for changes on a specific collection or document.
-  ///
-  /// Optionally filters by [docId] and/or [types].
-  MongoListener onColChange(
-    String collection, {
-    String? docId,
-    List<MongoChangeType?> types = const [],
-    void Function(MongoChange change)? callback,
-  }) {
-    List<String> events = [];
-    if (types.isEmpty) types.add(null);
-
-    for (var type in types) {
-      events.add(
-        _buildEventName(collection: collection, type: type, docId: docId),
-      );
-    }
-
-    final listener = _createListener(events: events, callback: callback);
-
-    return listener;
-  }
-
-  /// Listens for changes across multiple collections and/or types.
-  ///
-  /// If no collection/type is specified, listens to all changes.
-  MongoListener onDbChange({
-    List<String?> collections = const [],
-    List<MongoChangeType?> types = const [],
-    void Function(MongoChange change)? callback,
-  }) {
-    List<String> events = [];
-
-    types = types.where((t) => t != null).toList();
-    collections = collections.where((t) => t != null).toList();
-
-    if (types.isEmpty) types.add(null);
-    if (collections.isEmpty) collections.add(null);
-
-    for (final collection in collections) {
-      for (var type in types) {
-        events.add(_buildEventName(collection: collection, type: type));
-      }
-    }
-
-    return _createListener(events: events, callback: callback);
-  }
 }
 
 MongoRealtime get realtime => MongoRealtime.instance;
+
+/// A listener instance to database or specific collections
+class _MongoRealtimeDB {
+  final List<String?> _collections;
+  final MongoRealtime _mongoRealtime;
+
+  _MongoRealtimeDB(this._mongoRealtime, List<String?> collections)
+    : _collections = collections.where((t) => t != null).toList() {
+    if (_collections.isEmpty) _collections.add(null);
+  }
+
+  _MongoRealtimeCol col(String collection) =>
+      _MongoRealtimeCol(_mongoRealtime, collection);
+
+  _MongoListener onChange({
+    List<MongoChangeType?> types = const [],
+    void Function(_MongoChange change)? callback,
+  }) {
+    List<String> events = [];
+    types = types.where((t) => t != null).toList();
+    if (types.isEmpty) types.add(null);
+    for (final collection in _collections) {
+      for (var type in types) {
+        events.add(
+          _mongoRealtime._buildEventName(collection: collection, type: type),
+        );
+      }
+    }
+
+    return _mongoRealtime._createListener(events: events, callback: callback);
+  }
+}
+
+/// A listener instance to a specific collection
+class _MongoRealtimeCol {
+  final String _collection;
+  final MongoRealtime _mongoRealtime;
+
+  _MongoRealtimeCol(this._mongoRealtime, String collection)
+    : _collection = collection;
+
+  _MongoRealtimeDoc doc(String docId) =>
+      _MongoRealtimeDoc(_mongoRealtime, _collection, docId);
+
+  _MongoListener onChange({
+    List<MongoChangeType?> types = const [],
+    void Function(_MongoChange change)? callback,
+  }) {
+    List<String> events = [];
+    types = types.where((t) => t != null).toList();
+    if (types.isEmpty) types.add(null);
+    for (var type in types) {
+      events.add(
+        _mongoRealtime._buildEventName(collection: _collection, type: type),
+      );
+    }
+
+    return _mongoRealtime._createListener(events: events, callback: callback);
+  }
+}
+
+
+/// A listener instance to a specific documet
+class _MongoRealtimeDoc {
+  final String _collection;
+  final String _docId;
+  final MongoRealtime _mongoRealtime;
+
+  _MongoRealtimeDoc(this._mongoRealtime, String collection, String docId)
+    : _collection = collection,
+      _docId = docId;
+
+  _MongoListener onChange({
+    List<MongoChangeType?> types = const [],
+    void Function(_MongoChange change)? callback,
+  }) {
+    List<String> events = [];
+    types = types.where((t) => t != null).toList();
+    if (types.isEmpty) types.add(null);
+    for (var type in types) {
+      events.add(
+        _mongoRealtime._buildEventName(
+          collection: _collection,
+          type: type,
+          docId: _docId,
+        ),
+      );
+    }
+
+    return _mongoRealtime._createListener(events: events, callback: callback);
+  }
+}

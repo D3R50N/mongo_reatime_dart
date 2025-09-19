@@ -11,6 +11,10 @@ class Printer {
   /// If no type is provided, the message is printed with no color.
   Printer([PrintType? type]) : _type = type;
 
+  void clear() {
+    print('\x1B[2J\x1B[0;0H');
+  }
+
   /// Writes [text] to the console using the color based on [_type].
   void write(String text) {
     switch (_type) {

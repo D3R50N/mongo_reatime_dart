@@ -35,7 +35,7 @@ npm install mongo-realtime
 Create a simple Node.js server:
 
 ```js
-const MongoRealtime  = require("mongo-realtime");
+const MongoRealtime = require("mongo-realtime");
 
 // ...server initialization and db connection
 
@@ -62,7 +62,7 @@ void main() async {
 
   // After calling init(), you can use MongoRealtime.instance or the getter 'realtime'
 
-  final listener = MongoRealtime.instance.onDbChange(
+  final listener = MongoRealtime.instance.db().onChange(
     callback: (change) => print("Change: ${change.collection}"),
   );
 
@@ -73,6 +73,8 @@ void main() async {
   listener.cancel();
 }
 ```
+
+See [api overview](#api-overview) for more details.
 
 #### Using auth token
 
@@ -104,12 +106,10 @@ final devServer = MongoRealtime(
 );
 
 // Listen to changes
-prodServer.onColChange(
-  "users",
+prodServer.col("users").onChange(
   callback: (change) => print("users changed on prod"),
 );
-devServer.onColChange(
-  "posts",
+devServer.col("posts").onChange(
   callback: (change) => print("posts changed on dev"),
 );
 ```
@@ -118,20 +118,21 @@ devServer.onColChange(
 
 ```dart
 //  Listeners
-realtime.onColChange(
-  "users",
-  docId: "1234",
-  types: [MongoChangeType.insert],
-); // when got a new user with id 1234
 
-realtime.onDbChange(
-  collections: ["notifications", "posts"],
-  types: [MongoChangeType.delete],
-); // when delete a notification or post
+realtime.col("users").doc("1234").onChange(types: [MongoChangeType.insert]); // when got a new user with id 1234
 
-realtime.onDbChange(
-  types: [MongoChangeType.drop],
-); // when drop any collection
+realtime.db(["notifications", "posts"]).onChange(types: [MongoChangeType.delete]); // when delete a notification or post
+
+realtime.db().onChange(types: [MongoChangeType.drop]); // when drop any collection
+
+realtime.listStreamMapped<String>(
+  "usersWithName",
+  fromMap: (doc) => doc["name"],
+  filter: (value) {
+    return value.toString().startsWith("A");
+  })
+.listen((s) => print(s)); // Stream of list of documents from "users" collection
+
 ```
 
 #### Using streams instead of callback
@@ -140,8 +141,8 @@ realtime.onDbChange(
 void doSomething(change) {}
 void doSomethingOnStream(change) {}
 
-final listener = realtime.onColChange(
-  "notifications",
+final listener = realtime.col(
+  "notifications").onChange(
   types: [MongoChangeType.insert],
   callback: doSomething,
 ); //new notification
@@ -153,18 +154,25 @@ listener.stream.listen(doSomethingOnStream);
 
 #### Listening to specific events
 
-You can listen to any event (even [db events](#db-events)) on the socket juste like with socket.io
+You can listen to any event (even [db events](#db-events) or [list stream events](#list-stream-events)) on the socket juste like with socket.io
 
 ```dart
-realtime.socket.on("custom-event", (data) {}); 
+realtime.socket.on("custom-event", (data) {});
 realtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
 ```
 
 ## API Overview
 
-- `MongoRealtime.init(url)`: Connect to your bridge server.
-- `MongoRealtime.onColChange(...)`: Listen to collection or doc changes.
-- `MongoRealtime.onDbChange(...)`: Listen to one or many collections.
+- `MongoRealtime.init(url,...)`: Connect to your bridge server.
+- `db(...)` : Instance of `MongoRealtimeDB`.
+- `col(...)` :Instance of `MongoRealtimeCol`.
+- `listStreamMapped<T>(...)` : Stream of list of mapped objects from a collection.
+- `listStream(...)` : Stream of list of documents from a collection.
+- `MongoRealtimeDB.col(...)` : Same as `MongoRealtimeDB.col(...)`.
+- `MongoRealtimeCol.doc(...)` : Instance of `MongoRealtimeDoc`.
+- `MongoRealtimeDB.onChange(...)`: Listen to one or many collections.
+- `MongoRealtimeCol.onChange(...)`: Listen to a collection changes.
+- `MongoRealtimeDoc.onChange(...)`: Listen to doc changes.
 
 Each listener provides:
 
@@ -194,6 +202,10 @@ Each listener provides:
 - `db:update:users:XYZ`
 - `db:delete:posts:229`
 - ...
+
+### List Stream Events
+
+- `db:stream:{streamId}`
 
 ## License
 
