@@ -174,51 +174,41 @@ class MongoRealtime {
     OptionBuilder optionBuilder = OptionBuilder()
         .setTransports(['websocket'])
         .setAuth({'token': token, ...?authData})
-        .enableForceNew()
-        .enableForceNewConnection()
-        .disableMultiplex()
-        .disableReconnection()
+        .disableAutoConnect()
         .setExtraHeaders(headers ?? {});
-
-    if (!autoConnect) {
-      optionBuilder = optionBuilder.disableAutoConnect();
-    }
 
     socket = io(url, optionBuilder.build());
 
-    socket.onConnect((data) {
-      _log("Connected", PrintType.success);
-      if (onConnect != null) onConnect(data);
-    });
+    socket
+      ..onConnect((data) {
+        _log("Connected", PrintType.success);
+        if (onConnect != null) onConnect(data);
+      })
+      ..onDisconnect((reason) {
+        _log("Disconnected ($reason)", PrintType.warning);
+        if (onDisconnect != null) onDisconnect(reason);
+      })
+      ..onError((error) {
+        _log("Error ($error)", PrintType.error);
+        if (onError != null) onError(error);
+      })
+      ..onConnectError((error) {
+        _log("Cannot connect ($error)", PrintType.error);
+        if (onConnectError != null) onConnectError(error);
+      })
+      ..onAny((event, data) {
+        if (!event.startsWith('db:')) return;
+        // _log("Received '$event'");
+        for (final listener in _listeners.where(
+          (l) => l._events.contains(event),
+        )) {
+          final change = _MongoChange.fromJson(data);
+          listener.call(change);
+        }
+      });
 
-    socket.onDisconnect((reason) {
-      _log("Disconnected ($reason)", PrintType.warning);
-      if (onDisconnect != null) onDisconnect(reason);
-    });
-
-    socket.onError((error) {
-      _log("Error ($error)", PrintType.error);
-      if (onError != null) onError(error);
-    });
-
-    socket.onConnectError((error) {
-      _log("Cannot connect ($error)", PrintType.error);
-      if (onConnectError != null) onConnectError(error);
-    });
-
-    // Catch all db-related events and forward to matching listeners
-    socket.onAny((event, data) {
-      if (!event.startsWith('db:')) return;
-      // _log("Received '$event'");
-      for (final listener in _listeners.where(
-        (l) => l._events.contains(event),
-      )) {
-        final change = _MongoChange.fromJson(data);
-        listener.call(change);
-      }
-    });
+    if (autoConnect) connect();
   }
-
 
   _MongoRealtimeDB db([List<String?> collections = const []]) =>
       _MongoRealtimeDB(this, collections);
@@ -372,12 +362,38 @@ class MongoRealtime {
     reconnect();
   }
 
-  void connect() {
+  bool _connect([int? attempt]) {
+    if (attempt != null) {
+      _log('Connection attempt $attempt');
+    }
     socket.connect();
+    if (!socket.connected) {
+      socket.emitReserved('connect_error', 'Connection refused');
+    }
+    return socket.connected;
   }
 
-  void reconnect() {
+  /// Try to connect [retries] times within each [interval]
+  Future<bool> forceConnect([
+    int retries = 10,
+    Duration interval = const Duration(seconds: 1),
+  ]) async {
+    for (var i = 0; i < retries; i++) {
+      if (_connect(i + 1)) return true;
+      await Future.delayed(interval);
+    }
+    return false;
+  }
+
+  /// Connect manually the socket
+  bool connect() {
+    return _connect();
+  }
+
+  /// Reconnect the socket after disconnecting it.
+  bool reconnect() {
     socket.disconnect().connect();
+    return socket.connected;
   }
 }
 
@@ -442,7 +458,6 @@ class _MongoRealtimeCol {
     return _mongoRealtime._createListener(events: events, callback: callback);
   }
 }
-
 
 /// A listener instance to a specific documet
 class _MongoRealtimeDoc {

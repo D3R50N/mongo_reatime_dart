@@ -6,6 +6,10 @@
 * You can now listen to document changes with `MongoRealtime().col(collectionName).doc(docId).onChange()`.
 * Support of list streams with `listStream()` and `listStreamMapped<T>()` methods.
 
+## 0.1.1
+
+* New method forceConnect() to force a connection until successful or retries exhausted
+
 ## 0.1.0
 
 * autoConnect option (default false) to connect automatically on init()
