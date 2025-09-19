@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:mongo_realtime/core/printer.dart';
 import 'package:mongo_realtime/mongo_realtime.dart';
 
