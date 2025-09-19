@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0
+## 1.1.1
 
 * New way to listen events with `onChange()` method on `MongoRealtimeDB`, `MongoRealtimeCol` and `MongoRealtimeDoc` classes.
 * You can now listen to document changes with `MongoRealtime().col(collectionName).doc(docId).onChange()`.
