@@ -7,10 +7,6 @@ void main() async {
     print(d);
   });
 
-  realtime.listStream("usersWithName").listen((d) {
-    print(d);
-  });
-
   realtime.socket.on("custom-event", (data) {});
   realtime.socket.on("db:insert:users:1234", (data) {});
 }
