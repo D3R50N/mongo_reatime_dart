@@ -1,6 +1,6 @@
 name: mongo_realtime
 description: "A Dart package that allows you to listen in real-time to changes in a MongoDB database"
-version: 1.1.1
+version: 1.1.2
 homepage: https://github.com/D3R50N/mongo_reatime_dart
   
 

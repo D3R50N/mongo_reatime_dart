@@ -164,6 +164,7 @@ realtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
 ## API Overview
 
 - `MongoRealtime.init(url,...)`: Connect to your bridge server.
+- `MongoRealtime.forceConnect(...)`: Force connect to the server after some retries.
 - `db(...)` : Instance of `MongoRealtimeDB`.
 - `col(...)` :Instance of `MongoRealtimeCol`.
 - `listStreamMapped<T>(...)` : Stream of list of mapped objects from a collection.

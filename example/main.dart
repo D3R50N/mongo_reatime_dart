@@ -17,11 +17,11 @@ void main() async {
   );
 
   realtime
-      .listStreamMapped<String>(
+      .listStreamMapped<String?>(
         "usersWithName",
         fromMap: (doc) => doc["name"],
         filter: (value) {
-          return value == "Andy";
+          return value == "Admin";
         },
       )
       .listen((s) {

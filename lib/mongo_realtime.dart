@@ -154,6 +154,7 @@ class MongoRealtime {
 
   late final Socket socket;
   final List<_MongoListener> _listeners = [];
+  final Map<String, String> _registeredStreams = {};
   final bool _showLogs;
 
   /// Creates and connects the MongoRealtime client.
@@ -171,17 +172,20 @@ class MongoRealtime {
     void Function(dynamic error)? onError,
     void Function(dynamic error)? onConnectError,
   }) : _showLogs = showLogs {
-    OptionBuilder optionBuilder = OptionBuilder()
-        .setTransports(['websocket'])
-        .setAuth({'token': token, ...?authData})
-        .disableAutoConnect()
-        .setExtraHeaders(headers ?? {});
+    OptionBuilder optionBuilder =
+        OptionBuilder().setTransports(['websocket']).setAuth({
+            'token': token,
+            ...?authData,
+          }).disableAutoConnect()
+          ..enableForceNewConnection()
+          ..enableForceNew().setExtraHeaders(headers ?? {});
 
     socket = io(url, optionBuilder.build());
 
     socket
       ..onConnect((data) {
         _log("Connected", PrintType.success);
+
         if (onConnect != null) onConnect(data);
       })
       ..onDisconnect((reason) {
@@ -195,6 +199,13 @@ class MongoRealtime {
       ..onConnectError((error) {
         _log("Cannot connect ($error)", PrintType.error);
         if (onConnectError != null) onConnectError(error);
+      })
+      ..onReconnect((_) {
+        for (final e in _registeredStreams.entries) {
+          final streamId = e.value;
+          final registerId = e.key;
+          _registerListStream(streamId, registerId);
+        }
       })
       ..onAny((event, data) {
         if (!event.startsWith('db:')) return;
@@ -298,17 +309,30 @@ class MongoRealtime {
     bool Function(T value)? filter,
   }) {
     StreamController<List<T>> controller = StreamController();
-    socket.on("db:stream:$streamId", (d) {
+
+    void handler(d) {
       List<T> list =
           (d as List)
               .map((e) => fromMap(e as Map<String, dynamic>))
               .where((v) => filter?.call(v) ?? true)
               .toList();
-
       controller.add(list);
-    });
+    }
+
+    socket.on("db:stream:$streamId", handler);
+
+    final registerId = Uuid.long(10); // large uuid
+    socket.on("db:stream[register][$registerId]", handler);
+    _registerListStream(streamId, registerId);
 
     return controller.stream;
+  }
+
+  void _registerListStream(String streamId, String registerId) {
+    socket.emit("db:stream[register]", [streamId, registerId]);
+    if (_registeredStreams[registerId] != streamId) {
+      _registeredStreams[registerId] = streamId;
+    }
   }
 
   /// Creates and registers a new [_MongoListener] for a list of [events].
@@ -362,11 +386,12 @@ class MongoRealtime {
     reconnect();
   }
 
-  bool _connect([int? attempt]) {
+  Future<bool> _connect([int? attempt]) async {
     if (attempt != null) {
       _log('Connection attempt $attempt');
     }
     socket.connect();
+    await Future.delayed(Duration(milliseconds: 200));
     if (!socket.connected) {
       socket.emitReserved('connect_error', 'Connection refused');
     }
@@ -379,14 +404,14 @@ class MongoRealtime {
     Duration interval = const Duration(seconds: 1),
   ]) async {
     for (var i = 0; i < retries; i++) {
-      if (_connect(i + 1)) return true;
+      if (await _connect(i + 1)) return true;
       await Future.delayed(interval);
     }
     return false;
   }
 
   /// Connect manually the socket
-  bool connect() {
+  Future<bool> connect() async {
     return _connect();
   }
 
