@@ -246,6 +246,7 @@ class MongoRealtime {
     void Function(dynamic error)? onConnectError,
     bool showLogs = true,
     bool autoConnect = false,
+    int connectionDelay = 500,
   }) {
     instance = MongoRealtime(
       url,
@@ -258,6 +259,7 @@ class MongoRealtime {
       autoConnect: autoConnect,
       onConnectError: onConnectError,
       showLogs: showLogs,
+      connectionDelay: connectionDelay,
     );
 
     return instance;
