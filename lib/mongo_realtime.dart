@@ -155,6 +155,7 @@ class MongoRealtime {
   late final Socket socket;
   final List<_MongoListener> _listeners = [];
   final Map<String, String> _registeredStreams = {};
+  final Map<String, List<dynamic>> _cachedStreams = {};
   final bool _showLogs;
 
   /// Delay in milliseconds before check if connected
@@ -318,6 +319,9 @@ class MongoRealtime {
     bool Function(T value)? filter,
   }) {
     StreamController<List<T>> controller = StreamController();
+    
+    final cached = _cachedStreams[streamId];
+    if (cached != null && cached is List<T>) controller.add(cached);
 
     void handler(d) {
       List<T> list =
@@ -325,6 +329,8 @@ class MongoRealtime {
               .map((e) => fromMap(e as Map<String, dynamic>))
               .where((v) => filter?.call(v) ?? true)
               .toList();
+
+      _cachedStreams[streamId] = list;
       controller.add(list);
     }
 
@@ -402,19 +408,22 @@ class MongoRealtime {
   }
 
   /// Try to connect [retries] times within each [interval]
-  Future<bool> forceConnect([
+  Future<bool> forceConnect({
     int retries = 10,
-    Duration interval = const Duration(seconds: 1),
-  ]) async {
+    Duration interval = const Duration(seconds: 5),
+  }) async {
     _log("Connecting...");
     if (retries <= 0) retries = 1;
     for (var i = 0; i < retries; i++) {
       if (i != 0) await Future.delayed(interval);
-      if (await _connect()) return true;
+      if (await _connect()) {
+        _log('Connected after $retries attempt${retries > 1 ? "s" : ""}');
+        return true;
+      }
     }
     socket.emitReserved(
       'connect_error',
-      'Cannot connect after $retries attempt${retries > 1}',
+      'Cannot connect after $retries attempt${retries > 1 ? "s" : ""}',
     );
 
     return false;
