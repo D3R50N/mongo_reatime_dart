@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3
+
+- Changed listStreamMapped to return a broadcast stream so multiple listeners can listen to the same stream.
+- Fixed connect and forceConnect methods.
+
 ## 1.1.2
 
 - Fixed an issue where socket lose all registered streams after a reconnection.

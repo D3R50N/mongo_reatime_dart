@@ -10,29 +10,28 @@ void main() async {
     'ws://localhost:3000',
     autoConnect: true,
     token: "1234",
+    showLogs: false,
     onConnectError: (data) {},
     onConnect: (data) {},
     onError: (error) {},
     onDisconnect: (reason) {},
   );
 
-  realtime
-      .listStreamMapped<String?>(
-        "usersWithName",
-        fromMap: (doc) => doc["name"],
-        filter: (value) {
-          return value == "Admin";
-        },
+  kRealtime
+      .listStreamMapped<Map?>(
+        "challenges",
+        fromMap: (doc) => doc["reward"],
+        filter: (value) => value != null,
       )
       .listen((s) {
         print(s);
       });
 
-  realtime.db().onChange(types: [MongoChangeType.delete]).stream.listen((c) {
+  kRealtime.db().onChange(types: [MongoChangeType.delete]).stream.listen((c) {
     print("Deletion detected");
   });
 
-  realtime
+  kRealtime
       .col("users")
       .onChange(
         types: [MongoChangeType.insert],
@@ -41,5 +40,5 @@ void main() async {
         },
       );
 
-  realtime.socket.on("db:insert:users:1234", (data) {});
+  kRealtime.socket.on("db:insert:users:1234", (data) {});
 }

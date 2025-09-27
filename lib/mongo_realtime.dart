@@ -157,6 +157,12 @@ class MongoRealtime {
   final Map<String, String> _registeredStreams = {};
   final bool _showLogs;
 
+  /// Delay in milliseconds before check if connected
+  final int connectionDelay;
+
+  String get uri => socket.io.uri;
+  bool get connected => socket.connected;
+
   /// Creates and connects the MongoRealtime client.
   ///
   /// Listens for events prefixed with `db:` and routes them to matching listeners.
@@ -171,13 +177,14 @@ class MongoRealtime {
     void Function(dynamic reason)? onDisconnect,
     void Function(dynamic error)? onError,
     void Function(dynamic error)? onConnectError,
+    this.connectionDelay = 500,
   }) : _showLogs = showLogs {
     OptionBuilder optionBuilder =
         OptionBuilder().setTransports(['websocket']).setAuth({
-            'token': token,
             ...?authData,
+            'token': token,
           }).disableAutoConnect()
-          ..enableForceNewConnection()
+          ..enableReconnection()
           ..enableForceNew().setExtraHeaders(headers ?? {});
 
     socket = io(url, optionBuilder.build());
@@ -325,7 +332,7 @@ class MongoRealtime {
     socket.on("db:stream[register][$registerId]", handler);
     _registerListStream(streamId, registerId);
 
-    return controller.stream;
+    return controller.stream.asBroadcastStream();
   }
 
   void _registerListStream(String streamId, String registerId) {
@@ -386,15 +393,9 @@ class MongoRealtime {
     reconnect();
   }
 
-  Future<bool> _connect([int? attempt]) async {
-    if (attempt != null) {
-      _log('Connection attempt $attempt');
-    }
+  Future<bool> _connect() async {
     socket.connect();
-    await Future.delayed(Duration(milliseconds: 200));
-    if (!socket.connected) {
-      socket.emitReserved('connect_error', 'Connection refused');
-    }
+    await Future.delayed(Duration(milliseconds: connectionDelay));
     return socket.connected;
   }
 
@@ -403,16 +404,28 @@ class MongoRealtime {
     int retries = 10,
     Duration interval = const Duration(seconds: 1),
   ]) async {
+    _log("Connecting...");
+    if (retries <= 0) retries = 1;
     for (var i = 0; i < retries; i++) {
-      if (await _connect(i + 1)) return true;
-      await Future.delayed(interval);
+      if (i != 0) await Future.delayed(interval);
+      if (await _connect()) return true;
     }
+    socket.emitReserved(
+      'connect_error',
+      'Cannot connect after $retries attempt${retries > 1}',
+    );
+
     return false;
   }
 
   /// Connect manually the socket
   Future<bool> connect() async {
-    return _connect();
+    _log("Connecting...");
+    bool v = await _connect();
+    if (!v) {
+      socket.emitReserved('connect_error', 'Cannot connect');
+    }
+    return v;
   }
 
   /// Reconnect the socket after disconnecting it.
@@ -422,7 +435,7 @@ class MongoRealtime {
   }
 }
 
-MongoRealtime get realtime => MongoRealtime.instance;
+MongoRealtime get kRealtime => MongoRealtime.instance;
 
 /// A listener instance to database or specific collections
 class _MongoRealtimeDB {

@@ -60,14 +60,14 @@ import 'package:mongo_realtime/mongo_realtime.dart';
 void main() async {
   MongoRealtime.init("http://my_server:server_port", showLogs: false);
 
-  // After calling init(), you can use MongoRealtime.instance or the getter 'realtime'
+  // After calling init(), you can use MongoRealtime.instance or the getter 'kRealtime'
 
   final listener = MongoRealtime.instance.db().onChange(
     callback: (change) => print("Change: ${change.collection}"),
   );
 
   // connect to the server when autoConnect is false
-  MongoRealtime.instance.connect(); // or realtime.connect();
+  MongoRealtime.instance.connect(); // or kRealtime.connect();
 
   // Stop listening:
   listener.cancel();
@@ -119,13 +119,13 @@ devServer.col("posts").onChange(
 ```dart
 //  Listeners
 
-realtime.col("users").doc("1234").onChange(types: [MongoChangeType.insert]); // when got a new user with id 1234
+kRealtime.col("users").doc("1234").onChange(types: [MongoChangeType.insert]); // when got a new user with id 1234
 
-realtime.db(["notifications", "posts"]).onChange(types: [MongoChangeType.delete]); // when delete a notification or post
+kRealtime.db(["notifications", "posts"]).onChange(types: [MongoChangeType.delete]); // when delete a notification or post
 
-realtime.db().onChange(types: [MongoChangeType.drop]); // when drop any collection
+kRealtime.db().onChange(types: [MongoChangeType.drop]); // when drop any collection
 
-realtime.listStreamMapped<String>(
+kRealtime.listStreamMapped<String>(
   "usersWithName",
   fromMap: (doc) => doc["name"],
   filter: (value) {
@@ -141,7 +141,7 @@ realtime.listStreamMapped<String>(
 void doSomething(change) {}
 void doSomethingOnStream(change) {}
 
-final listener = realtime.col(
+final listener = kRealtime.col(
   "notifications").onChange(
   types: [MongoChangeType.insert],
   callback: doSomething,
@@ -157,8 +157,8 @@ listener.stream.listen(doSomethingOnStream);
 You can listen to any event (even [db events](#db-events) or [list stream events](#list-stream-events)) on the socket juste like with socket.io
 
 ```dart
-realtime.socket.on("custom-event", (data) {});
-realtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
+kRealtime.socket.on("custom-event", (data) {});
+kRealtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
 ```
 
 ## API Overview
