@@ -34,7 +34,7 @@ class Printer {
 
   /// Prints plain [text] without any color.
   void _printText(String text) {
-    print(text);
+    print("\x1B[37m$text\x1B[0m");
   }
 
   /// Prints [text] to the console as a warning message (yellow).

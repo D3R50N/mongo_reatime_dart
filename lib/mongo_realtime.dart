@@ -414,10 +414,10 @@ class MongoRealtime {
   }) async {
     _log("Connecting...");
     if (retries <= 0) retries = 1;
-    for (var i = 0; i < retries; i++) {
-      if (i != 0) await Future.delayed(interval);
+    for (var i = 1; i <= retries; i++) {
+      if (i != 1) await Future.delayed(interval);
       if (await _connect()) {
-        _log('Connected after $retries attempt${retries > 1 ? "s" : ""}');
+        _log('Connected after ${i} attempt${i > 1 ? "s" : ""}');
         return true;
       }
     }
