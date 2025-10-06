@@ -10,7 +10,7 @@ void main() async {
     'ws://localhost:3000',
     autoConnect: true,
     token: "1234",
-    // showLogs: false,
+    showLogs: false,
     onConnectError: (data) {},
     onConnect: (data) {},
     onError: (error) {},
@@ -19,18 +19,10 @@ void main() async {
 
   kRealtime
       .listStream(
-        "usersWithName",
+        "users",
+        filter: (doc) => doc["name"] != null,
         sortBy: (value) => value["name"],
         sortOrderDesc: true,
-      )
-      .listen((d) {
-        print(d);
-      });
-
-  kRealtime
-      .listStream(
-        "usersWithName",
-        filter: (d) => d["name"].toString().contains("x"),
       )
       .listen((d) {
         print(d);
