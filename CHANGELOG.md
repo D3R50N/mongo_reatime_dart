@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- Updated minimum server version to 1.2.0
+- Auto reconnect when listening to a list stream and the connection is lost.
+- Added sortBy and sortOrderDesc parameters to listStream and listStreamMapped methods to sort the list by an attribute in ascending or descending order.
+
 ## 1.1.3
 
 - Changed listStreamMapped to return a broadcast stream so multiple listeners can listen to the same stream.

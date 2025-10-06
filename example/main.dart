@@ -10,7 +10,7 @@ void main() async {
     'ws://localhost:3000',
     autoConnect: true,
     token: "1234",
-    showLogs: false,
+    // showLogs: false,
     onConnectError: (data) {},
     onConnect: (data) {},
     onError: (error) {},
@@ -18,13 +18,22 @@ void main() async {
   );
 
   kRealtime
-      .listStreamMapped<Map?>(
-        "challenges",
-        fromMap: (doc) => doc["reward"],
-        filter: (value) => value != null,
+      .listStream(
+        "usersWithName",
+        sortBy: (value) => value["name"],
+        sortOrderDesc: true,
       )
-      .listen((s) {
-        print(s);
+      .listen((d) {
+        print(d);
+      });
+
+  kRealtime
+      .listStream(
+        "usersWithName",
+        filter: (d) => d["name"].toString().contains("x"),
+      )
+      .listen((d) {
+        print(d);
       });
 
   kRealtime.db().onChange(types: [MongoChangeType.delete]).stream.listen((c) {

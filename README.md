@@ -130,7 +130,10 @@ kRealtime.listStreamMapped<String>(
   fromMap: (doc) => doc["name"],
   filter: (value) {
     return value.toString().startsWith("A");
-  })
+  },
+  sortBy: (value) => value,
+  sortOrderDesc: true, // Sort names in descending order
+  )
 .listen((s) => print(s)); // Stream of list of documents from "users" collection
 
 ```

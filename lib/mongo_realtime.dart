@@ -164,6 +164,26 @@ class MongoRealtime {
   String get uri => socket.io.uri;
   bool get connected => socket.connected;
 
+  static const String _minimumVersion = "1.2.0";
+
+  int _compareVersions(String v) {
+    final parts1 = _minimumVersion.split('.').map(int.parse).toList();
+    final parts2 = v.split('.').map(int.parse).toList();
+
+    final maxLength = [
+      parts1.length,
+      parts2.length,
+    ].reduce((a, b) => a > b ? a : b);
+
+    for (var i = 0; i < maxLength; i++) {
+      final p1 = i < parts1.length ? parts1[i] : 0;
+      final p2 = i < parts2.length ? parts2[i] : 0;
+      if (p1 != p2) return p1.compareTo(p2);
+    }
+
+    return 0;
+  }
+
   /// Creates and connects the MongoRealtime client.
   ///
   /// Listens for events prefixed with `db:` and routes them to matching listeners.
@@ -224,6 +244,15 @@ class MongoRealtime {
           final change = _MongoChange.fromJson(data);
           listener.call(change);
         }
+      })
+      ..on("version", (v) {
+        if (_compareVersions(v) == 1) {
+          _log(
+            "Server version ($v) doesn't satisfy the minimum $_minimumVersion",
+            PrintType.error,
+          );
+          socket.dispose();
+        }
       });
 
     if (autoConnect) connect();
@@ -281,11 +310,15 @@ class MongoRealtime {
   Stream<List<Map<String, dynamic>>> listStream(
     String streamId, {
     bool Function(Map<String, dynamic> doc)? filter,
+    Comparable Function(Map<String, dynamic> value)? sortBy,
+    bool sortOrderDesc = false,
   }) {
     return listStreamMapped<Map<String, dynamic>>(
       streamId,
       filter: filter,
       fromMap: (d) => d,
+      sortBy: sortBy,
+      sortOrderDesc: sortOrderDesc,
     );
   }
 
@@ -313,25 +346,44 @@ class MongoRealtime {
   /// - [fromMap]: A function that converts a raw document (`Map<String, dynamic>`)
   ///   into an instance of type [T].
   /// - [filter]: An optional function to include/exclude items from the list.
+  /// - [sortBy]: An optional function to sort the list by an attribute.
+  /// - [sortOrderDesc]: Sort in DESC order.
   Stream<List<T>> listStreamMapped<T>(
     String streamId, {
     required T Function(Map<String, dynamic> doc) fromMap,
     bool Function(T value)? filter,
+    Comparable Function(T value)? sortBy,
+    bool sortOrderDesc = false,
   }) {
+    if (!connected) reconnect(); // to prevent stream stop forever when offline
+
     StreamController<List<T>> controller = StreamController();
-    
+
+    List<T> filterAndSort(List<T> list) {
+      final filtered = list.where((v) => filter?.call(v) ?? true).toList();
+      if (sortBy != null) {
+        filtered.sort(
+          (a, b) =>
+              sortOrderDesc
+                  ? sortBy(b).compareTo(sortBy(a))
+                  : sortBy(a).compareTo(sortBy(b)),
+        );
+      }
+
+      return filtered;
+    }
+
     final cached = _cachedStreams[streamId];
-    if (cached != null && cached is List<T>) controller.add(cached);
+    if (cached != null && cached is List<T>) {
+      controller.add(filterAndSort(cached));
+    }
 
     void handler(d) {
       List<T> list =
-          (d as List)
-              .map((e) => fromMap(e as Map<String, dynamic>))
-              .where((v) => filter?.call(v) ?? true)
-              .toList();
+          (d as List).map((e) => fromMap(e as Map<String, dynamic>)).toList();
 
       _cachedStreams[streamId] = list;
-      controller.add(list);
+      controller.add(filterAndSort(list));
     }
 
     socket.on("db:stream:$streamId", handler);
@@ -376,7 +428,7 @@ class MongoRealtime {
   /// Logs a message to the console if [_showLogs] is enabled.
   void _log(String message, [PrintType? type]) {
     if (_showLogs) {
-      Printer(type).write("[${"SOCKET ${socket.id ?? ""}".trim()}] $message");
+      Printer(type).write("[REALTIME] $message");
     }
   }
 
@@ -417,7 +469,7 @@ class MongoRealtime {
     for (var i = 1; i <= retries; i++) {
       if (i != 1) await Future.delayed(interval);
       if (await _connect()) {
-        _log('Connected after ${i} attempt${i > 1 ? "s" : ""}');
+        _log('Connected after $i attempt${i > 1 ? "s" : ""}');
         return true;
       }
     }
@@ -434,7 +486,7 @@ class MongoRealtime {
     _log("Connecting...");
     bool v = await _connect();
     if (!v) {
-      socket.emitReserved('connect_error', 'Cannot connect');
+      socket.emitReserved('connect_error', 'Connection refused or aborted');
     }
     return v;
   }
