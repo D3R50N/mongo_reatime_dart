@@ -3,7 +3,7 @@ import 'package:mongo_realtime/mongo_realtime.dart';
 void main() async {
   MongoRealtime.init('ws://localhost:3000', token: "1234");
   kRealtime.forceConnect();
-  kRealtime.listStream("usersWithName").listen((d) {
+  kRealtime.stream("usersWithName").listen((d) {
     print(d);
   });
 

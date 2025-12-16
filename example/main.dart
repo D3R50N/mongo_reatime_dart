@@ -1,7 +1,7 @@
 // ignore_for_file: avoid_print
 
-import 'package:mongo_realtime/core/printer.dart';
 import 'package:mongo_realtime/mongo_realtime.dart';
+import 'package:mongo_realtime/utils/printer.dart';
 
 void main() async {
   Printer().clear();
@@ -18,28 +18,30 @@ void main() async {
   );
 
   kRealtime
-      .listStream(
-        "users",
-        filter: (doc) => doc["name"] != null,
-        sortBy: (value) => value["name"],
-        sortOrderDesc: true,
+      .streamMapped(
+        "adidas",
+        reverse: false,
+        fromMap: (Map<String, dynamic> doc) {
+          return doc["email"] as String?;
+        },
       )
       .listen((d) {
-        print(d);
+        // print(d.list.lastOrNull);
       });
 
-  kRealtime.db().onChange(types: [MongoChangeType.delete]).stream.listen((c) {
+  kRealtime.db().onChange(types: [RealtimeChangeType.delete]).stream.listen((
+    c,
+  ) {
     print("Deletion detected");
   });
 
   kRealtime
-      .col("users")
+      .col("brands")
+      .doc("6941da4b75f0338f9eccb93d")
       .onChange(
-        types: [MongoChangeType.insert],
+        types: [RealtimeChangeType.delete],
         callback: (change) {
-          print("New user ${change.doc?["email"]}");
+          print("change $change");
         },
       );
-
-  kRealtime.socket.on("db:insert:users:1234", (data) {});
 }

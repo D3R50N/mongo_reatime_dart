@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0 (Breaking Changes)
+
+- Stream events need a limit parameter now to avoid large data transfers.
+- listStream() and listStreamMapped() methods now are named stream() and streamMapped() respectively.
+- Stream events now return instance of RealtimeData<T> instead of List<Map<String, dynamic>> or List<T>
+
 ## 1.2.0
 
 - Updated minimum server version to 1.2.0
