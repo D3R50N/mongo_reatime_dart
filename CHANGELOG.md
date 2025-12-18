@@ -4,7 +4,7 @@
 
 - Stream events need a limit parameter now to avoid large data transfers.
 - listStream() and listStreamMapped() methods now are named stream() and streamMapped() respectively.
-- Stream events now return instance of RealtimeData<T> instead of List<Map<String, dynamic>> or List<T>
+- DB operations (count, find, findOne, update and updateOne) are now avaailable on MongoRealtimeCol and MongoRealtimeDoc classes.
 
 ## 1.2.0
 

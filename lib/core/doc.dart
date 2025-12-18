@@ -29,4 +29,44 @@ class _RealtimeDoc {
 
     return _mongoRealtime._createListener(events: events, callback: callback);
   }
+
+  Future find<T>({T Function(Map<String, dynamic> doc)? map}) async {
+    final data =
+        await _RealtimeCol(
+              _mongoRealtime,
+              _collection,
+            )._emitFindEvent(id: _docId)
+            as Map<String, dynamic>?;
+
+    if (map == null) return data;
+    if (data == null) return null;
+
+    return map(data);
+  }
+
+  Future<int> update<T>({
+    Map<String, dynamic>? $set,
+    Map<String, dynamic>? $inc,
+    Map<String, dynamic>? $unset,
+    Map<String, dynamic>? $push,
+    Map<String, dynamic>? $pull,
+    Map<String, dynamic>? $addToSet,
+    Map<String, dynamic>? $rename,
+    Map<String, dynamic>? $setOnInsert,
+  }) async {
+    final updateData = (
+      $set: $set,
+      $inc: $inc,
+      $unset: $unset,
+      $push: $push,
+      $pull: $pull,
+      $addToSet: $addToSet,
+      $rename: $rename,
+      $setOnInsert: $setOnInsert,
+    );
+    return await _RealtimeCol(
+      _mongoRealtime,
+      _collection,
+    )._emitUpdateEvent(update: updateData, force: true, id: _docId);
+  }
 }

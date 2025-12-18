@@ -125,7 +125,7 @@ kRealtime.db(["notifications", "posts"]).onChange(types: [MongoChangeType.delete
 
 kRealtime.db().onChange(types: [MongoChangeType.drop]); // when drop any collection
 
-kRealtime.listStreamMapped<String>(
+kRealtime.streamMapped<String>(
   "usersWithName",
   fromMap: (doc) => doc["name"],
   filter: (value) {
@@ -136,6 +136,8 @@ kRealtime.listStreamMapped<String>(
   )
 .listen((s) => print(s)); // Stream of list of documents from "users" collection
 
+
+await kRealtime.col("users").count() // see also find, findOne, update, updateOne methods
 ```
 
 #### Using streams instead of callback
@@ -170,8 +172,8 @@ kRealtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
 - `MongoRealtime.forceConnect(...)`: Force connect to the server after some retries.
 - `db(...)` : Instance of `MongoRealtimeDB`.
 - `col(...)` :Instance of `MongoRealtimeCol`.
-- `listStreamMapped<T>(...)` : Stream of list of mapped objects from a collection.
-- `listStream(...)` : Stream of list of documents from a collection.
+- `streamMapped<T>(...)` : Stream of list of mapped objects from a collection.
+- `stream(...)` : Stream of list of documents from a collection.
 - `MongoRealtimeDB.col(...)` : Same as `MongoRealtimeDB.col(...)`.
 - `MongoRealtimeCol.doc(...)` : Instance of `MongoRealtimeDoc`.
 - `MongoRealtimeDB.onChange(...)`: Listen to one or many collections.
@@ -209,7 +211,7 @@ Each listener provides:
 
 ### List Stream Events
 
-- `db:stream:{streamId}`
+- `realtime:{streamId}:{registerId}`
 
 ## License
 

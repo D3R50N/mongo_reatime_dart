@@ -5,7 +5,6 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:mongo_realtime/core/data.dart';
 import 'package:mongo_realtime/utils/uuid.dart';
 import 'package:socket_io_client/socket_io_client.dart';
 
@@ -27,16 +26,11 @@ class MongoRealtime {
 
   late final Socket socket;
   final List<RealtimeListener> _listeners = [];
-  final Map<String, String> _registeredStreams = {};
-  final Map<String, List<dynamic>> _cachedStreams = {};
   final Map<String, Map<String, Map<String, dynamic>>> _cachedData = {};
-  final Map<String, StreamController<List>> _controllers = {};
   final bool _showLogs;
 
-  List<Map<String, dynamic>> _getData<T>(String coll) {
-    final map = _cachedData[coll];
-    if (map == null) return [];
-    return map.values.toList();
+  Map<String, Map<String, dynamic>> getData<T>(String coll) {
+    return _cachedData[coll] ?? {};
   }
 
   /// Delay in milliseconds before check if connected
@@ -181,13 +175,13 @@ class MongoRealtime {
   /// });
   /// ```
 
-  Stream<RealtimeData<Map<String, dynamic>>> stream(
+  Stream<List<Map<String, dynamic>>> stream(
     String streamId, {
     int? limit,
     bool Function(Map<String, dynamic> doc)? filter,
     Comparable Function(Map<String, dynamic> value)? sortBy,
-    bool sortOrderDesc = false,
-    bool reverse = false,
+    bool? sortOrderDesc,
+    bool? reverse,
   }) {
     return streamMapped<Map<String, dynamic>>(
       streamId,
@@ -229,26 +223,36 @@ class MongoRealtime {
   /// - [reverse]: Get docs from last.
   /// - [limit]: Limit per fetch.
 
-  Stream<RealtimeData<T>> streamMapped<T>(
+  Stream<List<T>> streamMapped<T>(
     String streamId, {
     int? limit,
     required T Function(Map<String, dynamic> doc) fromMap,
     bool Function(T value)? filter,
     Comparable Function(T value)? sortBy,
-    bool sortOrderDesc = false,
-    bool reverse = false,
+    bool? sortOrderDesc,
+    bool? reverse,
   }) {
     if (!connected) reconnect(); // to prevent stream stop forever when offline
 
-    StreamController<RealtimeData<T>> controller = StreamController();
-    Map<String, T> results = {};
+    StreamController<List<T>> controller = StreamController();
+    final results = getData(streamId);
 
-    List<T> filterAndSort(Iterable<T> list) {
+    List<T> filterAndSort() {
+      List<T> list = [];
+      for (final doc in results.values) {
+        try {
+          final mapped = fromMap(doc);
+          list.add(mapped);
+        } catch (e) {
+          _log("Failed to parse ${doc["_id"]} in $streamId");
+        }
+      }
+
       final filtered = list.where((v) => filter?.call(v) ?? true).toList();
       if (sortBy != null) {
         filtered.sort(
           (a, b) =>
-              sortOrderDesc
+              sortOrderDesc ?? false
                   ? sortBy(b).compareTo(sortBy(a))
                   : sortBy(a).compareTo(sortBy(b)),
         );
@@ -257,33 +261,29 @@ class MongoRealtime {
       return filtered;
     }
 
+    if (results.keys.isNotEmpty) {
+      controller.add(filterAndSort()); // send if has in cache
+    }
+
     final registerId = Uuid.long();
 
     socket.emit("realtime", {
       "streamId": streamId,
       "limit": limit,
-      "reverse": reverse,
+      "reverse": reverse ?? true,
       "registerId": registerId,
     });
 
     handler(map) {
       final data = RealtimeEventData.fromMap(map);
+      _cachedData[streamId] ??= {};
+
       for (final doc in data.results) {
-        try {
-          results[doc["_id"]] = fromMap(doc);
-        } catch (e) {
-          _log("Failed to parse ${doc["_id"]} in $streamId");
-        }
+        results[doc["_id"]] = doc;
+        _cachedData[streamId]![doc["_id"]] = doc;
       }
 
-      controller.add(
-        RealtimeData(
-          list: filterAndSort(results.values),
-          coll: data.coll,
-          totalCount: data.total,
-          remaining: data.remaining,
-        ),
-      );
+      controller.add(filterAndSort());
     }
 
     socket.on("realtime:$streamId", handler);

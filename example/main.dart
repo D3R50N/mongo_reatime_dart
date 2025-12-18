@@ -10,23 +10,33 @@ void main() async {
     'ws://localhost:3000',
     autoConnect: true,
     token: "1234",
-    showLogs: false,
+    showLogs: true,
     onConnectError: (data) {},
     onConnect: (data) {},
     onError: (error) {},
     onDisconnect: (reason) {},
   );
 
+  // final l = await kRealtime
+  //     .col("users")
+  //     .doc("693ddd1b1c05a5148947888b")
+  //     .find(map: (doc) => doc["userType"]);
+
+  // final l = await kRealtime
+  //     .col("users")
+  //     .doc("693ddd1b1c05a5148947888f")
+  //     .update($set: {"firstname": "Max"});
+  // print(l);
+
   kRealtime
       .streamMapped(
-        "adidas",
-        reverse: false,
+        "users",
         fromMap: (Map<String, dynamic> doc) {
           return doc["email"] as String?;
         },
       )
       .listen((d) {
-        // print(d.list.lastOrNull);
+        print(d.length);
       });
 
   kRealtime.db().onChange(types: [RealtimeChangeType.delete]).stream.listen((
