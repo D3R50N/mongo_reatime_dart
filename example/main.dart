@@ -17,16 +17,14 @@ void main() async {
     onDisconnect: (reason) {},
   );
 
-  // final l = await kRealtime
-  //     .col("users")
-  //     .doc("693ddd1b1c05a5148947888b")
-  //     .find(map: (doc) => doc["userType"]);
+  final l = await kRealtime
+      .col("users")
+      .doc("693ddd1b1c05a5148947888f")
+      .update($set: {"firstname": "Max"});
+  print(l);
 
-  // final l = await kRealtime
-  //     .col("users")
-  //     .doc("693ddd1b1c05a5148947888f")
-  //     .update($set: {"firstname": "Max"});
-  // print(l);
+  final c = await kRealtime.col("users").count();
+  print(c);
 
   kRealtime
       .streamMapped(

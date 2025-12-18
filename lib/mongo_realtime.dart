@@ -39,7 +39,7 @@ class MongoRealtime {
   String get uri => socket.io.uri;
   bool get connected => socket.connected;
 
-  static const String _minimumVersion = "2.0.0";
+  static const String _minimumVersion = "2.0.1";
 
   int _compareVersions(String v) {
     final parts1 = _minimumVersion.split('.').map(int.parse).toList();
