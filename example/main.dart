@@ -17,24 +17,15 @@ void main() async {
     onDisconnect: (reason) {},
   );
 
-  final l = await kRealtime
-      .col("users")
-      .doc("693ddd1b1c05a5148947888f")
-      .update($set: {"firstname": "Max"});
-  print(l);
-
-  final c = await kRealtime.col("users").count();
-  print(c);
-
   kRealtime
       .streamMapped(
-        "users",
+        "orgs",
         fromMap: (Map<String, dynamic> doc) {
-          return doc["email"] as String?;
+          return doc["_id"] as String?;
         },
       )
       .listen((d) {
-        print(d.length);
+        print(d);
       });
 
   kRealtime.db().onChange(types: [RealtimeChangeType.delete]).stream.listen((

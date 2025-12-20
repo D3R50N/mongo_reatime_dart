@@ -39,7 +39,7 @@ class MongoRealtime {
   String get uri => socket.io.uri;
   bool get connected => socket.connected;
 
-  static const String _minimumVersion = "2.0.1";
+  static const String _minimumVersion = "2.0.2";
 
   int _compareVersions(String v) {
     final parts1 = _minimumVersion.split('.').map(int.parse).toList();
@@ -278,9 +278,16 @@ class MongoRealtime {
       final data = RealtimeEventData.fromMap(map);
       _cachedData[streamId] ??= {};
 
-      for (final doc in data.results) {
-        results[doc["_id"]] = doc;
-        _cachedData[streamId]![doc["_id"]] = doc;
+      for (final doc in data.added) {
+        final id = doc["_id"];
+        results[id] = doc;
+        _cachedData[streamId]![id] = doc;
+      }
+
+      for (final doc in data.removed) {
+        final id = doc["_id"];
+        results.remove(id);
+        _cachedData[streamId]?.remove(id);
       }
 
       controller.add(filterAndSort());

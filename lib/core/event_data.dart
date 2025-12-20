@@ -4,37 +4,25 @@ part of '../mongo_realtime.dart';
 
 /// Parsed event got from server
 class RealtimeEventData {
-  final List<Map<String, dynamic>> results;
-  final String coll;
-  final int count;
-  final int total;
-  final int remaining;
+  final List<Map<String, dynamic>> added;
+  final List<Map<String, dynamic>> removed;
 
-  RealtimeEventData({
-    required this.results,
-    required this.coll,
-    required this.count,
-    required this.total,
-    required this.remaining,
-  });
+  RealtimeEventData({required this.added, required this.removed});
 
   Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'results': results,
-      'coll': coll,
-      'count': count,
-      'total': total,
-      'remaining': remaining,
-    };
+    return <String, dynamic>{'added': added, 'removed': removed};
   }
 
   factory RealtimeEventData.fromMap(Map<String, dynamic> map) {
     return RealtimeEventData(
-      results: List<Map<String, dynamic>>.from(map['results']),
-      coll: map['coll'] as String,
-      count: map['count'] as int,
-      total: map['total'] as int,
-      remaining: map['remaining'] as int,
+      added:
+          List<Map<String, dynamic>?>.from(
+            (map['added'] ?? []),
+          ).nonNulls.toList(),
+      removed:
+          List<Map<String, dynamic>?>.from(
+            (map['removed'] ?? []),
+          ).nonNulls.toList(),
     );
   }
 
