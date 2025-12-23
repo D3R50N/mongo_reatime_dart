@@ -26,6 +26,20 @@ void main() async {
       )
       .listen((d) {
         print(d);
+        print("-----");
+      });
+
+  kRealtime
+      .streamMapped(
+        "orgs",
+        fromMap: (Map<String, dynamic> doc) {
+          return doc["_id"] as String?;
+        },
+        reverse: false,
+      )
+      .listen((d) {
+        print("aaa $d");
+        print("-----");
       });
 
   kRealtime.db().onChange(types: [RealtimeChangeType.delete]).stream.listen((

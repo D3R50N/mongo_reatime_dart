@@ -5,6 +5,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:mongo_realtime/core/stream_data.dart';
 import 'package:mongo_realtime/utils/uuid.dart';
 import 'package:socket_io_client/socket_io_client.dart';
 
@@ -27,7 +28,10 @@ class MongoRealtime {
   late final Socket socket;
   final List<RealtimeListener> _listeners = [];
   final Map<String, Map<String, Map<String, dynamic>>> _cachedData = {};
+  final List<RealtimeStreamData> _streams = [];
   final bool _showLogs;
+
+  bool _firstConnected = false;
 
   Map<String, Map<String, dynamic>> getData<T>(String coll) {
     return _cachedData[coll] ?? {};
@@ -39,7 +43,7 @@ class MongoRealtime {
   String get uri => socket.io.uri;
   bool get connected => socket.connected;
 
-  static const String _minimumVersion = "2.0.2";
+  static const String _minimumVersion = "2.0.3";
 
   int _compareVersions(String v) {
     final parts1 = _minimumVersion.split('.').map(int.parse).toList();
@@ -81,7 +85,7 @@ class MongoRealtime {
             'token': token,
           }).disableAutoConnect()
           ..enableReconnection()
-          ..enableForceNew().setExtraHeaders(headers ?? {});
+          ..setReconnectionDelayMax(1000).setExtraHeaders(headers ?? {});
 
     socket = io(url, optionBuilder.build());
 
@@ -89,6 +93,13 @@ class MongoRealtime {
       ..onConnect((data) {
         _log("Connected", PrintType.success);
 
+        if (_firstConnected) {
+          for (var data in _streams) {
+            socket.emit("realtime", data.toMap());
+          }
+        } else {
+          _firstConnected = true;
+        }
         if (onConnect != null) onConnect(data);
       })
       ..onDisconnect((reason) {
@@ -239,7 +250,14 @@ class MongoRealtime {
 
     List<T> filterAndSort() {
       List<T> list = [];
-      for (final doc in results.values) {
+      final values = [...results.values];
+      values.sort(
+        (a, b) =>
+            (reverse ?? true)
+                ? '${b["_id"]}'.compareTo('${a["_id"]}')
+                : '${a["_id"]}'.compareTo('${b["_id"]}'),
+      );
+      for (final doc in values) {
         try {
           final mapped = fromMap(doc);
           list.add(mapped);
@@ -249,6 +267,7 @@ class MongoRealtime {
       }
 
       final filtered = list.where((v) => filter?.call(v) ?? true).toList();
+
       if (sortBy != null) {
         filtered.sort(
           (a, b) =>
@@ -267,12 +286,16 @@ class MongoRealtime {
 
     final registerId = Uuid.long();
 
-    socket.emit("realtime", {
-      "streamId": streamId,
-      "limit": limit,
-      "reverse": reverse ?? true,
-      "registerId": registerId,
-    });
+    final data = RealtimeStreamData(
+      streamId: streamId,
+      reverse: reverse ?? true,
+      registerId: registerId,
+      limit: limit,
+    );
+
+    _streams.add(data);
+
+    socket.emit("realtime", data.toMap());
 
     handler(map) {
       final data = RealtimeEventData.fromMap(map);
