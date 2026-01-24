@@ -18,29 +18,33 @@ void main() async {
   );
 
   kRealtime
-      .streamMapped(
-        "orgs",
-        fromMap: (Map<String, dynamic> doc) {
-          return doc["_id"] as String?;
-        },
+      .stream(
+        "posts",
+        reverse: true,
+        sortBy: (p) => p["datePublished"] ?? DateTime.now(),
       )
       .listen((d) {
-        print(d);
-        print("-----");
+        print("-----REVERSED ${d.first["_id"]} ${d.last["_id"]} ${d.length}");
       });
 
   kRealtime
-      .streamMapped(
-        "orgs",
-        fromMap: (Map<String, dynamic> doc) {
-          return doc["_id"] as String?;
-        },
+      .stream(
+        "posts",
         reverse: false,
+        sortBy: (p) => p["datePublished"] ?? DateTime.now(),
       )
       .listen((d) {
-        print("aaa $d");
-        print("-----");
+        print("----- ${d.first["_id"]}  ${d.last["_id"]} ${d.length}");
       });
+
+  kRealtime.stream("users", reverse: false).listen((d) {
+    print(
+      d
+          .where((p) => p["email"] == "test@frisz.fr")
+          .map((p) => "${p["firstname"]} ${p["lastname"]}"),
+    );
+    print("-----");
+  });
 
   kRealtime.db().onChange(types: [RealtimeChangeType.delete]).stream.listen((
     c,

@@ -10,8 +10,7 @@ class RealtimeBuilder<T> extends StatefulWidget {
     this.fromMap,
     this.filter,
     this.sortBy,
-    this.sortOrderDesc,
-    this.reverse,
+    this.reverse = true,
     this.errorBuilder,
     this.loadingBuilder,
     this.emptyBuilder,
@@ -24,8 +23,7 @@ class RealtimeBuilder<T> extends StatefulWidget {
   final T Function(Map<String, dynamic> doc)? fromMap;
   final bool Function(T value)? filter;
   final Comparable Function(T value)? sortBy;
-  final bool? sortOrderDesc;
-  final bool? reverse;
+  final bool reverse;
 
   final Widget Function(Object? error)? errorBuilder;
   final Widget Function()? loadingBuilder;
@@ -44,7 +42,6 @@ class _RealtimeBuilderState extends State<RealtimeBuilder> {
   late final fromMap = widget.fromMap;
   late final filter = widget.filter;
   late final sortBy = widget.sortBy;
-  late final sortOrderDesc = widget.sortOrderDesc;
   late final reverse = widget.reverse;
 
   @override
@@ -59,7 +56,6 @@ class _RealtimeBuilderState extends State<RealtimeBuilder> {
                 limit: limit,
                 reverse: reverse,
                 sortBy: sortBy,
-                sortOrderDesc: sortOrderDesc,
               )
               : mr.stream(
                 streamId,
@@ -67,7 +63,6 @@ class _RealtimeBuilderState extends State<RealtimeBuilder> {
                 limit: limit,
                 reverse: reverse,
                 sortBy: sortBy,
-                sortOrderDesc: sortOrderDesc,
               ),
       builder: (context, snapshot) {
         final data = snapshot.data;

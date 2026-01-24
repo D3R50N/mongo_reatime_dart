@@ -33,17 +33,13 @@ class MongoRealtime {
 
   bool _firstConnected = false;
 
-  Map<String, Map<String, dynamic>> getData<T>(String coll) {
-    return _cachedData[coll] ?? {};
-  }
-
   /// Delay in milliseconds before check if connected
   final int connectionDelay;
 
   String get uri => socket.io.uri;
   bool get connected => socket.connected;
 
-  static const String _minimumVersion = "2.0.3";
+  static const String _minimumVersion = "2.0.4";
 
   int _compareVersions(String v) {
     final parts1 = _minimumVersion.split('.').map(int.parse).toList();
@@ -191,8 +187,7 @@ class MongoRealtime {
     int? limit,
     bool Function(Map<String, dynamic> doc)? filter,
     Comparable Function(Map<String, dynamic> value)? sortBy,
-    bool? sortOrderDesc,
-    bool? reverse,
+    bool reverse = true,
   }) {
     return streamMapped<Map<String, dynamic>>(
       streamId,
@@ -201,7 +196,6 @@ class MongoRealtime {
       fromMap: (d) => d,
       sortBy: sortBy,
       reverse: reverse,
-      sortOrderDesc: sortOrderDesc,
     );
   }
 
@@ -240,20 +234,21 @@ class MongoRealtime {
     required T Function(Map<String, dynamic> doc) fromMap,
     bool Function(T value)? filter,
     Comparable Function(T value)? sortBy,
-    bool? sortOrderDesc,
-    bool? reverse,
+    bool reverse = true,
   }) {
     if (!connected) reconnect(); // to prevent stream stop forever when offline
 
     StreamController<List<T>> controller = StreamController();
-    final results = getData(streamId);
+    final Map<String, Map<String, dynamic>> results = Map.from(
+      _cachedData[streamId] ?? {},
+    );
 
-    List<T> filterAndSort() {
+    void update() {
       List<T> list = [];
       final values = [...results.values];
       values.sort(
         (a, b) =>
-            (reverse ?? true)
+            reverse
                 ? '${b["_id"]}'.compareTo('${a["_id"]}')
                 : '${a["_id"]}'.compareTo('${b["_id"]}'),
       );
@@ -271,24 +266,22 @@ class MongoRealtime {
       if (sortBy != null) {
         filtered.sort(
           (a, b) =>
-              sortOrderDesc ?? false
+              reverse
                   ? sortBy(b).compareTo(sortBy(a))
                   : sortBy(a).compareTo(sortBy(b)),
         );
       }
 
-      return filtered;
+      controller.add(filtered);
     }
 
-    if (results.keys.isNotEmpty) {
-      controller.add(filterAndSort()); // send if has in cache
-    }
+    if (_cachedData[streamId] != null) update(); // send if cached
 
     final registerId = Uuid.long();
 
     final data = RealtimeStreamData(
       streamId: streamId,
-      reverse: reverse ?? true,
+      reverse: reverse,
       registerId: registerId,
       limit: limit,
     );
@@ -313,7 +306,7 @@ class MongoRealtime {
         _cachedData[streamId]?.remove(id);
       }
 
-      controller.add(filterAndSort());
+      update();
     }
 
     socket.on("realtime:$streamId", handler);
