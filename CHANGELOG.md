@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.4
+
+- No more use `sortOrderDesc`. Just use `reverse`
+
 ## 2.0.0 (Breaking Changes)
 
 - Stream events need a limit parameter now to avoid large data transfers.
