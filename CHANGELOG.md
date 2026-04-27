@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1
+
+- Updated `flutter_reactive` dependency to `^1.0.1`.
+
 ## 2.1.0
 
 - Updated deprecated Readme and dart docs comments.
