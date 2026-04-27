@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0
+
+- Updated deprecated Readme and dart docs comments.
+- Fixed realtime stream filtering and sorting so `filter` and `sortBy` are now applied to emitted results.
+- Improved socket stream lifecycle management to avoid duplicate handlers and stale realtime registrations across rebuilds and reconnections.
+- Added cleanup for socket listeners and cached realtime stream state when a stream is no longer observed.
+- Updated `RealtimeBuilder` to reuse its stream instance and refresh it only when parameters change.
+- Updated example app to a concrete Flutter realtime dashboard demo.
+
 ## 2.0.4
 
 - No more use `sortOrderDesc`. Just use `reverse`

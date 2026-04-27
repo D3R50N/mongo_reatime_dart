@@ -38,9 +38,13 @@ class _RealtimeCol {
   _RealtimeCol(this._mongoRealtime, String collection)
     : _collection = collection;
 
+  /// Returns a document-scoped accessor for [docId].
   _RealtimeDoc doc(String docId) =>
       _RealtimeDoc(_mongoRealtime, _collection, docId);
 
+  /// Listens to changes emitted for this collection.
+  ///
+  /// When [types] is empty, all collection events are observed.
   RealtimeListener onChange({
     List<RealtimeChangeType?> types = const [],
     void Function(RealtimeChange change)? callback,
@@ -57,6 +61,7 @@ class _RealtimeCol {
     return _mongoRealtime._createListener(events: events, callback: callback);
   }
 
+  /// Counts documents in this collection matching [query].
   Future<int> count([Map<String, dynamic>? query]) async {
     return await _mongoRealtime.socket.emitWithAckAsync("realtime:count", {
       "coll": _collection,
@@ -85,6 +90,7 @@ class _RealtimeCol {
     });
   }
 
+  /// Finds documents in this collection and optionally maps each result.
   Future<List> find<T>({
     Map<String, dynamic>? query,
     int? limit,
@@ -109,6 +115,10 @@ class _RealtimeCol {
     return list.map(map).toList();
   }
 
+  /// Finds the first matching document in this collection.
+  ///
+  /// Returns the raw map when [map] is not provided, otherwise returns the
+  /// mapped value of type [T].
   Future findOne<T>({
     Map<String, dynamic>? query,
     Map<String, dynamic>? project,
@@ -169,6 +179,9 @@ class _RealtimeCol {
         0;
   }
 
+  /// Updates every document matching [query].
+  ///
+  /// Set [force] to `true` to allow updates without a filter.
   Future<int> update<T>({
     Map<String, dynamic>? $set,
     Map<String, dynamic>? $inc,
@@ -207,6 +220,7 @@ class _RealtimeCol {
     );
   }
 
+  /// Updates the first document matching [query].
   Future<int> updateOne<T>({
     Map<String, dynamic>? $set,
     Map<String, dynamic>? $inc,

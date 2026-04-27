@@ -5,6 +5,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_reactive/flutter_reactive.dart';
 import 'package:mongo_realtime/core/stream_data.dart';
 import 'package:mongo_realtime/utils/uuid.dart';
 import 'package:socket_io_client/socket_io_client.dart';
@@ -27,8 +28,10 @@ class MongoRealtime {
 
   late final Socket socket;
   final List<RealtimeListener> _listeners = [];
-  final Map<String, Map<String, Map<String, dynamic>>> _cachedData = {};
-  final List<RealtimeStreamData> _streams = [];
+  final Map<String, Reactive<Map<String, dynamic>>> _cachedData = {};
+  final Map<String, RealtimeStreamData> _streams = {};
+  final Map<String, int> _streamSubscribers = {};
+  final Map<String, void Function(dynamic map)> _streamHandlers = {};
   final bool _showLogs;
 
   bool _firstConnected = false;
@@ -36,7 +39,10 @@ class MongoRealtime {
   /// Delay in milliseconds before check if connected
   final int connectionDelay;
 
+  /// Returns the Socket.IO server URI currently configured for this instance.
   String get uri => socket.io.uri;
+
+  /// Whether the underlying socket is currently connected.
   bool get connected => socket.connected;
 
   static const String _minimumVersion = "2.0.4";
@@ -90,7 +96,7 @@ class MongoRealtime {
         _log("Connected", PrintType.success);
 
         if (_firstConnected) {
-          for (var data in _streams) {
+          for (final data in _streams.values) {
             socket.emit("realtime", data.toMap());
           }
         } else {
@@ -133,9 +139,14 @@ class MongoRealtime {
     if (autoConnect) connect();
   }
 
+  /// Returns a database-scoped accessor.
+  ///
+  /// When [collections] is omitted, listeners created from the returned object
+  /// can observe events from every collection.
   _RealtimeDB db([List<String?> collections = const []]) =>
       _RealtimeDB(this, collections);
 
+  /// Returns a collection-scoped accessor for [collection].
   _RealtimeCol col(String collection) => _RealtimeCol(this, collection);
 
   /// Initializes and stores the singleton instance of [MongoRealtime].
@@ -176,9 +187,9 @@ class MongoRealtime {
   ///
   /// Example:
   /// ```dart
-  /// final stream = MongoRealtime().stream("users");
+  /// final stream = MongoRealtime.instance.stream("users");
   /// stream.listen((users) {
-  ///   print(users.list); // List<Map<String, dynamic>>
+  ///   print(users); // List<Map<String, dynamic>>
   /// });
   /// ```
 
@@ -208,14 +219,14 @@ class MongoRealtime {
   ///
   /// Example:
   /// ```dart
-  /// final stream = MongoRealtime().streamMapped<User>(
+  /// final stream = MongoRealtime.instance.streamMapped<User>(
   ///   "users",
   ///   fromMap: (doc) => User.fromJson(doc),
   ///   filter: (user) => user.age > 18,
   /// );
   ///
   /// stream.listen((users) {
-  ///   print(users.list); // List<User> with age > 18
+  ///   print(users); // List<User> with age > 18
   /// });
   /// ```
   ///
@@ -224,9 +235,8 @@ class MongoRealtime {
   ///   into an instance of type [T].
   /// - [filter]: An optional function to include/exclude items from the list.
   /// - [sortBy]: An optional function to sort the list by an attribute.
-  /// - [sortOrderDesc]: Sort in DESC order.
-  /// - [reverse]: Get docs from last.
-  /// - [limit]: Limit per fetch.
+  /// - [reverse]: Whether to sort the underlying document order descending by `_id`.
+  /// - [limit]: Optional maximum number of items requested from the backend.
 
   Stream<List<T>> streamMapped<T>(
     String streamId, {
@@ -236,16 +246,20 @@ class MongoRealtime {
     Comparable Function(T value)? sortBy,
     bool reverse = true,
   }) {
-    if (!connected) reconnect(); // to prevent stream stop forever when offline
+    if (!connected) {
+      socket.connect();
+    }
 
-    StreamController<List<T>> controller = StreamController();
-    final Map<String, Map<String, dynamic>> results = Map.from(
-      _cachedData[streamId] ?? {},
+    final cacheKey = _streamCacheKey(
+      streamId: streamId,
+      reverse: reverse,
+      limit: limit,
     );
 
-    void update() {
+    _cachedData[cacheKey] ??= Reactive({});
+    final react = _cachedData[cacheKey]!.as((cached) {
       List<T> list = [];
-      final values = [...results.values];
+      final values = [...cached.values];
       values.sort(
         (a, b) =>
             reverse
@@ -272,47 +286,45 @@ class MongoRealtime {
         );
       }
 
-      controller.add(filtered);
+      return filtered;
+    });
+
+    final controller = StreamController<List<T>>.broadcast();
+    StreamSubscription<List<T>>? subscription;
+
+    void startListening() {
+      _ensureRealtimeStream(
+        cacheKey: cacheKey,
+        streamId: streamId,
+        reverse: reverse,
+        limit: limit,
+      );
+      _streamSubscribers[cacheKey] = (_streamSubscribers[cacheKey] ?? 0) + 1;
+      subscription = react.stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
     }
 
-    if (_cachedData[streamId] != null) update(); // send if cached
+    void stopListening() {
+      subscription?.cancel();
+      subscription = null;
 
-    final registerId = Uuid.long();
-
-    final data = RealtimeStreamData(
-      streamId: streamId,
-      reverse: reverse,
-      registerId: registerId,
-      limit: limit,
-    );
-
-    _streams.add(data);
-
-    socket.emit("realtime", data.toMap());
-
-    handler(map) {
-      final data = RealtimeEventData.fromMap(map);
-      _cachedData[streamId] ??= {};
-
-      for (final doc in data.added) {
-        final id = doc["_id"];
-        results[id] = doc;
-        _cachedData[streamId]![id] = doc;
+      final count = (_streamSubscribers[cacheKey] ?? 1) - 1;
+      if (count <= 0) {
+        _streamSubscribers.remove(cacheKey);
+        _disposeRealtimeStream(cacheKey);
+      } else {
+        _streamSubscribers[cacheKey] = count;
       }
-
-      for (final doc in data.removed) {
-        final id = doc["_id"];
-        results.remove(id);
-        _cachedData[streamId]?.remove(id);
-      }
-
-      update();
     }
 
-    socket.on("realtime:$streamId", handler);
-    socket.on("realtime:$streamId:$registerId", handler);
+    controller
+      ..onListen = startListening
+      ..onCancel = stopListening;
 
-    return controller.stream.asBroadcastStream();
+    return controller.stream;
   }
 
   /// Creates and registers a new [RealtimeListener] for a list of [events].
@@ -361,6 +373,7 @@ class MongoRealtime {
     return ev;
   }
 
+  /// Replaces the auth token used for future socket connections, then reconnects.
   void refreshAuthToken(String newToken) {
     socket.auth.token = newToken;
     reconnect();
@@ -394,7 +407,11 @@ class MongoRealtime {
     return false;
   }
 
-  /// Connect manually the socket
+  /// Attempts a single manual socket connection.
+  ///
+  /// Returns `true` when the socket reports itself as connected after
+  /// [connectionDelay], otherwise emits a synthetic `connect_error` event and
+  /// returns `false`.
   Future<bool> connect() async {
     _log("Connecting...");
     bool v = await _connect();
@@ -404,10 +421,74 @@ class MongoRealtime {
     return v;
   }
 
-  /// Reconnect the socket after disconnecting it.
+  /// Forces a disconnect followed by a reconnect attempt.
   bool reconnect() {
     socket.disconnect().connect();
     return socket.connected;
+  }
+
+  String _streamCacheKey({
+    required String streamId,
+    required bool reverse,
+    int? limit,
+  }) {
+    return '$streamId|reverse:$reverse|limit:${limit ?? "null"}';
+  }
+
+  void _ensureRealtimeStream({
+    required String cacheKey,
+    required String streamId,
+    required bool reverse,
+    int? limit,
+  }) {
+    if (_streams.containsKey(cacheKey)) {
+      return;
+    }
+
+    final registerId = Uuid.long();
+    final data = RealtimeStreamData(
+      streamId: streamId,
+      reverse: reverse,
+      registerId: registerId,
+      limit: limit,
+    );
+
+    void handler(dynamic map) {
+      final eventData = RealtimeEventData.fromMap(map);
+
+      Reactive.run(() {
+        for (final doc in eventData.added) {
+          final id = doc["_id"];
+          _cachedData[cacheKey]?.put(id, doc);
+        }
+
+        for (final doc in eventData.removed) {
+          final id = doc["_id"];
+          _cachedData[cacheKey]?.remove(id);
+        }
+      });
+    }
+
+    _streams[cacheKey] = data;
+    _streamHandlers[cacheKey] = handler;
+
+    socket.on("realtime:$streamId", handler);
+    socket.on("realtime:$streamId:$registerId", handler);
+    socket.emit("realtime", data.toMap());
+  }
+
+  void _disposeRealtimeStream(String cacheKey) {
+    final data = _streams.remove(cacheKey);
+    final handler = _streamHandlers.remove(cacheKey);
+
+    if (data == null || handler == null) {
+      _cachedData.remove(cacheKey);
+      return;
+    }
+
+    socket.off("realtime:${data.streamId}", handler);
+    socket.off("realtime:${data.streamId}:${data.registerId}", handler);
+    _cachedData.remove(cacheKey);
   }
 }
 

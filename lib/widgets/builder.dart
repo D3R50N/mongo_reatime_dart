@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mongo_realtime/mongo_realtime.dart';
 
+/// A Flutter widget that rebuilds from a realtime collection stream.
+///
+/// Use [fromMap] to map incoming Mongo documents to a typed model, or omit it
+/// to receive raw `Map<String, dynamic>` values through [child].
 class RealtimeBuilder<T> extends StatefulWidget {
   const RealtimeBuilder({
     super.key,
@@ -37,33 +41,58 @@ class RealtimeBuilder<T> extends StatefulWidget {
 class _RealtimeBuilderState extends State<RealtimeBuilder> {
   late MongoRealtime mr = widget.instance ?? MongoRealtime.instance;
 
-  late final streamId = widget.stream;
-  late final limit = widget.limit;
-  late final fromMap = widget.fromMap;
-  late final filter = widget.filter;
-  late final sortBy = widget.sortBy;
-  late final reverse = widget.reverse;
+  late Stream<List<dynamic>> realtimeStream = _createStream();
+
+  Stream<List<dynamic>> _createStream() {
+    final fromMap = widget.fromMap;
+    final filter = widget.filter;
+    final limit = widget.limit;
+    final reverse = widget.reverse;
+    final sortBy = widget.sortBy;
+    final streamId = widget.stream;
+
+    return fromMap != null
+        ? mr.streamMapped(
+          streamId,
+          fromMap: fromMap,
+          filter: filter,
+          limit: limit,
+          reverse: reverse,
+          sortBy: sortBy,
+        )
+        : mr.stream(
+          streamId,
+          filter: filter,
+          limit: limit,
+          reverse: reverse,
+          sortBy: sortBy,
+        );
+  }
+
+  @override
+  void didUpdateWidget(covariant RealtimeBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final nextMr = widget.instance ?? MongoRealtime.instance;
+    final shouldRefresh =
+        oldWidget.instance != widget.instance ||
+        oldWidget.stream != widget.stream ||
+        oldWidget.limit != widget.limit ||
+        oldWidget.fromMap != widget.fromMap ||
+        oldWidget.filter != widget.filter ||
+        oldWidget.sortBy != widget.sortBy ||
+        oldWidget.reverse != widget.reverse;
+
+    if (shouldRefresh) {
+      mr = nextMr;
+      realtimeStream = _createStream();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
-      stream:
-          fromMap != null
-              ? mr.streamMapped(
-                streamId,
-                fromMap: fromMap!,
-                filter: filter,
-                limit: limit,
-                reverse: reverse,
-                sortBy: sortBy,
-              )
-              : mr.stream(
-                streamId,
-                filter: filter,
-                limit: limit,
-                reverse: reverse,
-                sortBy: sortBy,
-              ),
+      stream: realtimeStream,
       builder: (context, snapshot) {
         final data = snapshot.data;
         final defaultEmpty = SizedBox.shrink();

@@ -10,9 +10,15 @@ class _RealtimeDB {
     if (_collections.isEmpty) _collections.add(null);
   }
 
+  /// Returns a collection-scoped accessor limited to [collection].
   _RealtimeCol col(String collection) =>
       _RealtimeCol(_mongoRealtime, collection);
 
+  /// Listens to database changes for the configured collections.
+  ///
+  /// When [types] is empty, all change types are forwarded.
+  /// When [callback] is provided, it is invoked for each matching event in
+  /// addition to being emitted on the returned listener's stream.
   RealtimeListener onChange({
     List<RealtimeChangeType?> types = const [],
     void Function(RealtimeChange change)? callback,

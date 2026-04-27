@@ -1,6 +1,6 @@
 part of "../mongo_realtime.dart";
 
-/// A listener instance to a specific documet
+/// A document-scoped accessor for realtime events and bridge operations.
 class _RealtimeDoc {
   final String _collection;
   final String _docId;
@@ -10,6 +10,9 @@ class _RealtimeDoc {
     : _collection = collection,
       _docId = docId;
 
+  /// Listens to changes emitted for this specific document.
+  ///
+  /// When [types] is empty, all document-level change types are observed.
   RealtimeListener onChange({
     List<RealtimeChangeType?> types = const [],
     void Function(RealtimeChange change)? callback,
@@ -30,6 +33,10 @@ class _RealtimeDoc {
     return _mongoRealtime._createListener(events: events, callback: callback);
   }
 
+  /// Fetches this document from the backend.
+  ///
+  /// Returns the raw map when [map] is not provided, otherwise returns the
+  /// mapped value of type [T].
   Future find<T>({T Function(Map<String, dynamic> doc)? map}) async {
     final data =
         await _RealtimeCol(
@@ -44,6 +51,7 @@ class _RealtimeDoc {
     return map(data);
   }
 
+  /// Updates this document by id and returns the number of affected documents.
   Future<int> update<T>({
     Map<String, dynamic>? $set,
     Map<String, dynamic>? $inc,

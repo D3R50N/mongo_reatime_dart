@@ -48,7 +48,7 @@ MongoRealtime.init({
 
 Make sure your MongoDB instance is a **replica set**.
 
-==**IMPORTANT NOTE :**== If your server is not using the mongo-reatime package, it should emit [db events](#db-events) itself through a socket.
+**Important:** If your server is not using the `mongo-realtime` package, it should emit [db events](#db-events) itself through a socket.
 
 ### 3. Use in Dart
 
@@ -119,11 +119,17 @@ devServer.col("posts").onChange(
 ```dart
 //  Listeners
 
-kRealtime.col("users").doc("1234").onChange(types: [MongoChangeType.insert]); // when got a new user with id 1234
+kRealtime.col("users").doc("1234").onChange(
+  types: [RealtimeChangeType.insert],
+); // When user 1234 is inserted
 
-kRealtime.db(["notifications", "posts"]).onChange(types: [MongoChangeType.delete]); // when delete a notification or post
+kRealtime.db(["notifications", "posts"]).onChange(
+  types: [RealtimeChangeType.delete],
+); // When a notification or post is deleted
 
-kRealtime.db().onChange(types: [MongoChangeType.drop]); // when drop any collection
+kRealtime.db().onChange(
+  types: [RealtimeChangeType.drop],
+); // When any collection is dropped
 
 kRealtime.streamMapped<String>(
   "usersWithName",
@@ -132,12 +138,11 @@ kRealtime.streamMapped<String>(
     return value.toString().startsWith("A");
   },
   sortBy: (value) => value,
-  sortOrderDesc: true, // Sort names in descending order
-  )
-.listen((s) => print(s)); // Stream of list of documents from "users" collection
+  reverse: true, // Descending order
+).listen((names) => print(names)); // Stream<List<String>>
 
 
-await kRealtime.col("users").count() // see also find, findOne, update, updateOne methods
+await kRealtime.col("users").count(); // See also find, findOne, update, updateOne
 ```
 
 #### Using streams instead of callback
@@ -148,7 +153,7 @@ void doSomethingOnStream(change) {}
 
 final listener = kRealtime.col(
   "notifications").onChange(
-  types: [MongoChangeType.insert],
+  types: [RealtimeChangeType.insert],
   callback: doSomething,
 ); //new notification
 
@@ -159,7 +164,8 @@ listener.stream.listen(doSomethingOnStream);
 
 #### Listening to specific events
 
-You can listen to any event (even [db events](#db-events) or [list stream events](#list-stream-events)) on the socket juste like with socket.io
+You can listen to any event, including [db events](#db-events) or
+[list stream events](#list-stream-events), directly on the socket like with socket.io.
 
 ```dart
 kRealtime.socket.on("custom-event", (data) {});
@@ -170,19 +176,21 @@ kRealtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
 
 - `MongoRealtime.init(url,...)`: Connect to your bridge server.
 - `MongoRealtime.forceConnect(...)`: Force connect to the server after some retries.
-- `db(...)` : Instance of `MongoRealtimeDB`.
-- `col(...)` :Instance of `MongoRealtimeCol`.
+- `db(...)`: Returns a database-scoped realtime accessor.
+- `col(...)`: Returns a collection-scoped realtime accessor.
 - `streamMapped<T>(...)` : Stream of list of mapped objects from a collection.
 - `stream(...)` : Stream of list of documents from a collection.
-- `MongoRealtimeDB.col(...)` : Same as `MongoRealtimeDB.col(...)`.
-- `MongoRealtimeCol.doc(...)` : Instance of `MongoRealtimeDoc`.
-- `MongoRealtimeDB.onChange(...)`: Listen to one or many collections.
-- `MongoRealtimeCol.onChange(...)`: Listen to a collection changes.
-- `MongoRealtimeDoc.onChange(...)`: Listen to doc changes.
+- `db(...).col(...)`: Returns a collection-scoped realtime accessor.
+- `col(...).doc(...)`: Returns a document-scoped realtime accessor.
+- `db(...).onChange(...)`: Listen to one or many collections.
+- `col(...).onChange(...)`: Listen to collection changes.
+- `doc(...).onChange(...)`: Listen to document changes.
+- `col(...).count()`, `find()`, `findOne()`, `update()`, `updateOne()`: Run collection operations through the bridge.
+- `doc(...).find()`, `update()`: Run document-scoped operations through the bridge.
 
 Each listener provides:
 
-- `stream`: A `Stream<MongoChange>`.
+- `stream`: A `Stream<RealtimeChange>`.
 - `cancel()`: To remove the listener.
 
 ### DB Events
