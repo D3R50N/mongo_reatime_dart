@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mongo_realtime/mongo_realtime.dart';
 
 void main() {
@@ -34,6 +35,8 @@ class ExampleHomePage extends StatefulWidget {
 class _ExampleHomePageState extends State<ExampleHomePage> {
   final Random _random = Random();
 
+  String u1Id = '69e8ee7021ed84fc8b04f1b6';
+
   Stream<List<RealtimeDocument<User>>> get _allUsersStream =>
       realtime
           .collection<User>('users', fromJson: User.fromJson)
@@ -50,8 +53,25 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
   Stream<RealtimeDocument<User>?> get _selectedUserStream =>
       realtime
           .collection<User>('users', fromJson: User.fromJson)
-          .doc('u1777507313937')
-          .stream();
+          .doc(u1Id)
+          .stream;
+
+  @override
+  void initState() {
+    super.initState();
+    realtime.collection('users').watch.onChange((change) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Change detected: ${change.type} on document ${change.docId}',
+            style: TextStyle(
+              color: change.isDelete ? Colors.redAccent : Colors.greenAccent,
+            ),
+          ),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +101,7 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
                   child: const Text('Insert User'),
                 ),
                 FilledButton.tonal(
-                  onPressed: _birthdayForAda,
+                  onPressed: _birthdayForU1,
                   child: const Text('Birthday For u1'),
                 ),
                 OutlinedButton(
@@ -168,8 +188,8 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
     });
   }
 
-  Future<void> _birthdayForAda() {
-    return realtime.collection('users').doc('u1777507313937').update({
+  Future<void> _birthdayForU1() {
+    return realtime.collection('users').doc(u1Id).update({
       r'$inc': {'age': 1},
       r'$addToSet': {'tags': 'birthday'},
     }, optimistic: true);
@@ -233,19 +253,42 @@ class _UserList extends StatelessWidget {
       return const Center(child: Text('No matching users yet.'));
     }
 
-    return ListView.separated(
-      itemCount: documents.length,
-      separatorBuilder: (_, __) => const Divider(height: 16),
-      itemBuilder: (context, index) {
-        final document = documents[index];
-        final user = document.value ?? User.fromJson(document.data);
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(user.name),
-          subtitle: Text('age ${user.age} • ${user.tags.join(', ')}'),
-          trailing: Text(document.id),
-        );
-      },
+    return Column(
+      spacing: 8,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Total: ${documents.length}',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+
+        Expanded(
+          child: ListView.separated(
+            itemCount: documents.length,
+            separatorBuilder: (_, __) => const Divider(height: 16),
+            itemBuilder: (context, index) {
+              final document = documents[index];
+              final user = document.value ?? User.fromJson(document.data);
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: document.id));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Document ID ${document.id} copied to clipboard',
+                      ),
+                    ),
+                  );
+                },
+                title: Text(user.name),
+                subtitle: Text('age ${user.age} • ${user.tags.join(', ')}'),
+                trailing: Text(document.id),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -299,9 +342,13 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['_id'] as String? ?? '',
-      name: json['name'] as String? ?? 'Unknown',
+      name: json['firstname'] as String? ?? 'Unknown',
       age: json['age'] as int? ?? 0,
-      createdAt: json['createdAt'] as int? ?? 0,
+      createdAt:
+          DateTime.tryParse(
+            json['createdAt']?.toString() ?? '',
+          )?.millisecondsSinceEpoch ??
+          0,
       tags: (json['tags'] as List<dynamic>? ?? const [])
           .map((value) => value.toString())
           .toList(growable: false),
