@@ -1,16 +1,18 @@
-# MongoRealtime 🚀
+# MongoRealtime
 
-A Dart package that allows you to listen in real-time to changes in a MongoDB database via a bridge with the Node.js package [`mongo-realtime`](https://www.npmjs.com/package/mongo-realtime).
+A pure Dart package that allows you to listen in real-time to changes in a MongoDB database via a WebSocket connection to a bridge server using the Node.js package [`mongo-realtime`](https://www.npmjs.com/package/mongo-realtime).
 
 ![Banner](logo.png)
 
 ## Features
 
-- Listen to insert, update, delete, replace, drop events on MongoDB collections.
-- Filter events by collection or specific document ID.
+- Listen to insert, update, delete events on MongoDB collections in real-time.
+- Filter and sort documents with a fluent query builder API.
+- Type-safe document mapping with generic types.
 - Stream changes as Dart events.
-- Easily manage multiple listeners.
-- Lightweight and efficient.
+- Optimistic updates with offline support.
+- Lightweight, pure Dart - no Flutter dependencies.
+- Automatic connection management and reconnection.
 
 ## Getting Started
 
@@ -26,7 +28,7 @@ dart pub add mongo_realtime
 
 This package relies on a Node.js bridge using [mongo-realtime](https://www.npmjs.com/package/mongo-realtime).
 
-Install it with (on the server):
+Install it (on the server):
 
 ```bash
 npm install mongo-realtime
@@ -35,15 +37,14 @@ npm install mongo-realtime
 Create a simple Node.js server:
 
 ```js
-const MongoRealtime = require("mongo-realtime");
+const { MongoRealTimeServer } = require("mongo-realtime");
 
-// ...server initialization and db connection
-
-// then init realtime with the same connection and server
-MongoRealtime.init({
-  uri: mongoose.connection,
-  server: server,
+const server = new MongoRealTimeServer({
+  mongoUri: "mongodb://localhost:27017/mydb",
+  dbName: "mydb",
 });
+
+await server.start();
 ```
 
 Make sure your MongoDB instance is a **replica set**.
@@ -58,168 +59,272 @@ Make sure your MongoDB instance is a **replica set**.
 import 'package:mongo_realtime/mongo_realtime.dart';
 
 void main() async {
-  MongoRealtime.init("http://my_server:server_port", showLogs: false);
+  // Connect to the server
+  // Use `connect` for later access  to the singleton instance `MongoRealtime.instance` or `realtime`
+  MongoRealtime.connect('ws://localhost:3000');
+  realtime.collection('users').stream.listen((documents) {
+    print('Users: ${documents.map((doc) => doc.id).toList()}');
+  });
 
-  // After calling init(), you can use MongoRealtime.instance or the getter 'kRealtime'
+  // Or create a new instance:
+  final client = MongoRealtime('ws://localhost:3000');
 
-  final listener = MongoRealtime.instance.db().onChange(
-    callback: (change) => print("Change: ${change.collection}"),
-  );
+  // Stream all documents from a collection
+  client.collection('users').stream.listen((documents) {
+    print('Users: ${documents.map((doc) => doc.id).toList()}');
+  });
 
-  // connect to the server when autoConnect is false
-  MongoRealtime.instance.connect(); // or kRealtime.connect();
+  // Listen to database changes
+  client.watch.onInsert((change) {
+    print('Inserted: ${change.docId} in ${change.collection}');
+  });
 
-  // Stop listening:
-  listener.cancel();
+  // Using a different url schema (e.g http instead of ws) also works, it will be converted to ws internally
+  final client2 = MongoRealtime('localhost:3000'); // This will connect to ws://localhost:3000
+  final client3 = MongoRealtime('https://my-api.com'); // This will connect to wss://my-api.com
 }
 ```
 
-See [api overview](#api-overview) for more details.
+#### Using auth data
 
-#### Using auth token
+If your server is setup with authentication, you may need to provide authentication data (e.g. a JWT token) when connecting.
+See [MongoRealtime Authentication](https://www.npmjs.com/package/mongo-realtime#authentication) for more details on the server side setup.
 
 ```dart
-MongoRealtime.init(
-  "http://my_server:server_port",
-  token : "my_jwt_token", // or any string
-  autoConnect: true, // default is false
-  authData: {"role": "admin"}, // optional additional data
+MongoRealtime.connect(
+  'my_server:3000',
+  authData: 'my_jwt_token',
 );
-```
 
-This will send the token to the server before connecting. The server can then verify it and accept or reject the connection.
-
-#### Using multiple instances
-
-```dart
-final prodServer = MongoRealtime(
-  "http://prod-server-url",
-  onConnect: (s) {
-    print("Connected to prod server");
+// or a Map for more complex auth data
+MongoRealtime.connect(
+  'my_server:3000',
+  authData: {
+    'token': 'my_jwt_token',
+    'userId': '123',
   },
 );
-final devServer = MongoRealtime(
-  "http://dev-server-url",
-  onConnect: (s) {
-    print("Connected to dev server");
-  },
+```
+
+#### Query with filters and sorting
+
+```dart
+
+// Find documents with query
+final users = await realtime.collection('users')
+  .where('age', isGreaterThan: 18)
+  .where('role', isEqualTo: 'admin')
+  .sort('createdAt', descending: true)
+  .limit(10)
+  .find();
+
+// Stream with real-time updates
+realtime.collection('users')
+  .where('status', isEqualTo: 'active')
+  .stream
+  .listen((documents) {
+    print('Active users: $documents');
+  });
+
+// `or` queries
+// All clauses inside `or` builder are combined with OR, and the result is combined with the rest of the query with AND
+realtime.collection('users')
+  .where('age', isGreaterThan: 18)
+  .or((q) {
+    // This will match users who are adults admin OR adults with active status
+    q.where('role', isEqualTo: 'admin');
+    q.where('status', isEqualTo: 'active');
+  })
+  .stream.listen((documents) {
+    print('Users who are either adults or active admins: $documents');
+  });
+```
+
+#### Type-safe document mapping
+
+```dart
+class User {
+  final String id;
+  final String name;
+  final int age;
+
+  User.fromJson(Map<String, dynamic> json)
+    : id = json['_id'],
+      name = json['name'],
+      age = json['age'];
+}
+
+// Map documents to User objects
+final users = await realtime.collection<User>('users',
+  fromJson: (json) => User.fromJson(json),
+).find();
+
+users.forEach((doc) {
+  print('${doc.value?.name} (${doc.value?.age})');
+});
+```
+
+#### Insert, update, delete
+
+```dart
+final collection = realtime.collection('users');
+
+// Insert
+await collection.insert({'name': 'John', 'age': 30});
+
+// Update
+await collection.update(
+  {'\$set': {'age': 31}},
+  filter: {'name': 'John'},
 );
 
-// Listen to changes
-prodServer.col("users").onChange(
-  callback: (change) => print("users changed on prod"),
+// Delete
+await collection.delete(filter: {'name': 'John'});
+```
+
+#### Document-specific operations
+
+```dart
+final doc = realtime.collection('users').doc('user_123');
+
+// Get a specific document
+final user = await doc.find();
+
+// Listen to changes on a specific document
+doc.stream().listen((user) {
+  print('User updated: $user');
+});
+
+// Update a specific document
+await doc.update({'\$set': {'age': 25}});
+
+// Delete a specific document
+await doc.delete();
+```
+
+#### Database change watchers
+
+```dart
+// Listen to all changes
+realtime.watch.onChange((change) {
+  print('Changed: ${change.docId} in ${change.collection}');
+});
+
+// Listen to specific collection
+realtime.collection('users').watch.onInsert((change) {
+  print('New user: ${change.docId}');
+});
+
+// Listen to specific document
+realtime.collection('users').doc('123').watch.onUpdate((change) {
+  print('User 123 updated');
+});
+```
+
+#### Multiple server instances
+
+```dart
+final prodServer = MongoRealtime('ws://prod-server:3000');
+final devServer = MongoRealtime('ws://dev-server:3000');
+
+// Listen to changes on different servers
+prodServer.collection('users').stream.listen(
+  (users) => print('Prod users: $users')
 );
-devServer.col("posts").onChange(
-  callback: (change) => print("posts changed on dev"),
+
+devServer.collection('users').stream.listen(
+  (users) => print('Dev users: $users')
 );
 ```
 
-#### Specific use cases
+#### Using optimistic updates
 
 ```dart
-//  Listeners
+final collection = client.collection('users');
 
-kRealtime.col("users").doc("1234").onChange(
-  types: [RealtimeChangeType.insert],
-); // When user 1234 is inserted
+// Optimistic insert - update UI immediately
+await collection.insert(
+  {'_id': 'new_user', 'name': 'Jane'},
+  optimistic: true,
+);
 
-kRealtime.db(["notifications", "posts"]).onChange(
-  types: [RealtimeChangeType.delete],
-); // When a notification or post is deleted
-
-kRealtime.db().onChange(
-  types: [RealtimeChangeType.drop],
-); // When any collection is dropped
-
-kRealtime.streamMapped<String>(
-  "usersWithName",
-  fromMap: (doc) => doc["name"],
-  filter: (value) {
-    return value.toString().startsWith("A");
-  },
-  sortBy: (value) => value,
-  reverse: true, // Descending order
-).listen((names) => print(names)); // Stream<List<String>>
-
-
-await kRealtime.col("users").count(); // See also find, findOne, update, updateOne
-```
-
-#### Using streams instead of callback
-
-```dart
-void doSomething(change) {}
-void doSomethingOnStream(change) {}
-
-final listener = kRealtime.col(
-  "notifications").onChange(
-  types: [RealtimeChangeType.insert],
-  callback: doSomething,
-); //new notification
-
-listener.stream.listen(doSomethingOnStream);
-
-// Both functions will be called doSomething and doSomethingOnStream when changes
-```
-
-#### Listening to specific events
-
-You can listen to any event, including [db events](#db-events) or
-[list stream events](#list-stream-events), directly on the socket like with socket.io.
-
-```dart
-kRealtime.socket.on("custom-event", (data) {});
-kRealtime.socket.on("db:update:users:1234", (data){}); // when user 1234 changes
+// The document appears in streams immediately,
+// then syncs with the server
+// Default is `optimistic: false` which ensures the operation is confirmed by the server before updating streams
 ```
 
 ## API Overview
 
-- `MongoRealtime.init(url,...)`: Connect to your bridge server.
-- `MongoRealtime.forceConnect(...)`: Force connect to the server after some retries.
-- `db(...)`: Returns a database-scoped realtime accessor.
-- `col(...)`: Returns a collection-scoped realtime accessor.
-- `streamMapped<T>(...)` : Stream of list of mapped objects from a collection.
-- `stream(...)` : Stream of list of documents from a collection.
-- `db(...).col(...)`: Returns a collection-scoped realtime accessor.
-- `col(...).doc(...)`: Returns a document-scoped realtime accessor.
-- `db(...).onChange(...)`: Listen to one or many collections.
-- `col(...).onChange(...)`: Listen to collection changes.
-- `doc(...).onChange(...)`: Listen to document changes.
-- `col(...).count()`, `find()`, `findOne()`, `update()`, `updateOne()`: Run collection operations through the bridge.
-- `doc(...).find()`, `update()`: Run document-scoped operations through the bridge.
+### Main Classes
 
-Each listener provides:
+- **`MongoRealtime`**: Main client for connecting to the realtime server.
+  - `MongoRealtime.connect(url, authData?)`: Connect to a WebSocket server (singleton).
+  - `MongoRealtime(url, authData?)`: Create a new instance.
+  - `instance`: Access the singleton instance.
+  - `realtime`: Global getter for the singleton instance.
 
-- `stream`: A `Stream<RealtimeChange>`.
-- `cancel()`: To remove the listener.
+### Collection & Document Access
 
-### DB Events
+- **`collection(name, fromJson?)`**: Get a collection reference.
+  - Returns `RealtimeCollectionReference<T>`.
 
-#### 1st level : `db:$operation_type`
+- **`RealtimeCollectionReference<T>`**:
+  - `where(field, ...)`: Add filter clause (supports `isEqualTo`, `isNotEqualTo`, `isGreaterThan`, `isGreaterOrEqualTo`, `isLessThan`, `isLessOrEqualTo`, `arrayContains`, `isIn`, `matches`).
+  - `or(builder)`: Add OR clause.
+  - `sort(field, descending?)`: Sort by field.
+  - `limit(count)`: Limit results.
+  - `stream`: Stream of all matching documents.
+  - `find()`: Fetch all matching documents once.
+  - `doc(id)`: Get a document reference.
+  - `insert(doc, optimistic?)`: Insert a document.
+  - `update(update, filter?, optimistic?)`: Update documents.
+  - `delete(filter?, optimistic?)`: Delete documents.
 
-- `db:change`
-- `db:insert`
-- `db:update`
-- `db:delete`
-- `db:drop`
-- `db:replace`
-- `db:invalidate`
+- **`doc(id)`**: Get a document reference.
+  - Returns `RealtimeDocumentReference<T>`.
 
-#### 2nd level : `$1st_level:$collection`
+- **`RealtimeDocumentReference<T>`**:
+  - `stream()`: Stream this document's changes.
+  - `find()`: Fetch this document once.
+  - `update(update, optimistic?)`: Update this document.
+  - `delete(optimistic?)`: Delete this document.
 
-- `db:change:users`
-- `db:insert:posts`
-- ...
+### Query Builder
 
-#### 3rd level : `$2nd_level:$document_id`
+- **`RealtimeQueryBuilder<T>`**:
+  - `where(field, ...)`: Add AND clause with field conditions.
+  - `or(builder)`: Add OR clause with multiple conditions.
+  - `sort(field, descending?)`: Add sort order.
+  - `limit(count)`: Limit number of documents.
+  - `stream`: Get as a broadcast stream.
+  - `find()`: Execute query once.
 
-- `db:update:users:XYZ`
-- `db:delete:posts:229`
-- ...
+### Database Watchers
 
-### List Stream Events
+- **`DbWatcher`**: Watch for database changes.
+  - `onChange(handler)`: Listen to any change.
+  - `onInsert(handler)`: Listen to inserts only.
+  - `onUpdate(handler)`: Listen to updates only.
+  - `onDelete(handler)`: Listen to deletes only.
+  - `offChange(handler)`: Unsubscribe from changes.
+  - `offInsert(handler)`: Unsubscribe from inserts.
+  - `offUpdate(handler)`: Unsubscribe from updates.
+  - `offDelete(handler)`: Unsubscribe from deletes.
 
-- `realtime:{streamId}:{registerId}`
+### Return Types
+
+- **`RealtimeDocument<T>`**: A document with metadata.
+  - `id`: Document ID.
+  - `data`: Raw document map.
+  - `value`: Typed value (if `fromJson` was provided).
+
+- **`RealtimeDbChange`**: A database change event.
+  - `type`: Insert, update, delete, or change.
+  - `collection`: Collection name.
+  - `docId`: Document ID.
+  - `fullDocument`: Full document (if available).
+  - `cast<T>(fromJson)`: Cast to typed model.
+  - `tryCast<T>(fromJson)`: Try to cast to typed model.
 
 ## License
 

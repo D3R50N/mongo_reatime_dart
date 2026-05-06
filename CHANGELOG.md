@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.0.0 (Breaking Changes)
+
+- **Major Refactoring**: Complete redesign of the library architecture with improved separation of concerns.
+- Replaced `socket_io_client` with `web_socket_channel` for better WebSocket management.
+- Removed `flutter_reactive` dependency, simplified reactive patterns with native Dart streams.
+- Removed Flutter dependency - library is now pure Dart.
+- **New API**: Changed from `MongoRealtime.init()` to `MongoRealtime.connect()`.
+- **Collection API**: Replaced direct stream methods with `collection(name)` and `doc(id)` accessors.
+- **Query Builder**: Added `RealtimeQueryBuilder` for fluent query construction with `where()`, `sort()`, `limit()` methods.
+- **Document References**: New `RealtimeDocumentReference` and `RealtimeCollectionReference` classes for better type safety.
+- **DB Watchers**: Replaced `onChange()` callbacks with `DbWatcher` for listening to database changes (insert, update, delete).
+- **Event Processing**: New `RealtimeEventProcessor` for handling server messages with better error handling.
+- **Caching**: Improved internal caching with `RealtimeCacheManager` for better performance.
+- **Query Manager**: New `RealtimeQueryManager` for managing active queries and subscriptions.
+- Removed `RealtimeBuilder` Flutter widget - use native `StreamBuilder` instead.
+- Removed `Uuid` utility class - generate IDs externally.
+- Improved logging with Dart's `developer.log`.
+
 ## 2.1.1
 
 - Updated `flutter_reactive` dependency to `^1.0.1`.
