@@ -1,0 +1,32 @@
+import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
+import 'dart:developer' as developer;
+
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+part 'src/core/cache_manager.dart';
+part 'src/core/collection_reference.dart';
+part 'src/core/document_reference.dart';
+part 'src/core/event_processor.dart';
+part 'src/core/live_query.dart';
+part 'src/core/mongo_realtime.dart';
+part 'src/core/printer.dart';
+part 'src/core/query_builder.dart';
+part 'src/core/query_manager.dart';
+part 'src/core/db_watcher.dart';
+part 'src/models/document.dart';
+part 'src/models/query_definition.dart';
+part 'src/models/db_change.dart';
+part 'src/models/types.dart';
+part 'src/services/socket_connection.dart';
+part 'src/services/web_socket_service.dart';
+part 'src/utils/filter_matcher.dart';
+part 'src/utils/json_path.dart';
+part 'src/utils/json_utils.dart';
+part 'src/utils/query_defaults.dart';
+part 'src/utils/sort_utils.dart';
+part 'src/utils/update_operators.dart';
+part 'src/utils/url_normalizer.dart';
+part 'src/utils/value_compare.dart';
