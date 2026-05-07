@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.1
+
+- Fixed `RealtimeQueryBuilder.or()` so each `or(...)` block is preserved as its own `$or` group inside the root `$and` chain instead of flattening all clauses into a single root-level `$or`.
+- Fixed `cache_manager` so it prevent duplicate entries in the cache when multiple queries with the same collection and filter are created. This prevents memory bloat and ensures consistent caching behavior across queries.
+
 ## 3.0.0 (Breaking Changes)
 
 - **Major Refactoring**: Complete redesign of the library architecture with improved separation of concerns.

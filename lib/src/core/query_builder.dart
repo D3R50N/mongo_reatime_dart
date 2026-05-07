@@ -171,55 +171,35 @@ abstract class _QueryAstNode {
 }
 
 class _QueryAst {
-  _QueryAst({
-    Iterable<_QueryAstNode> andClauses = const <_QueryAstNode>[],
-    Iterable<_QueryAstNode> orClauses = const <_QueryAstNode>[],
-  }) : andClauses = List.unmodifiable(andClauses),
-       orClauses = List.unmodifiable(orClauses);
+  _QueryAst({Iterable<_QueryAstNode> clauses = const <_QueryAstNode>[]})
+    : clauses = List.unmodifiable(clauses);
 
   factory _QueryAst.fromFilter(JsonMap? filter) {
     if (filter == null || filter.isEmpty) {
       return _QueryAst();
     }
 
-    return _QueryAst(andClauses: <_QueryAstNode>[_RawFilterNode(filter)]);
+    return _QueryAst(clauses: <_QueryAstNode>[_RawFilterNode(filter)]);
   }
 
-  final List<_QueryAstNode> andClauses;
-  final List<_QueryAstNode> orClauses;
+  final List<_QueryAstNode> clauses;
 
   _QueryAst addAnd(_QueryAstNode clause) {
-    return _QueryAst(
-      andClauses: <_QueryAstNode>[...andClauses, clause],
-      orClauses: orClauses,
-    );
+    return _QueryAst(clauses: <_QueryAstNode>[...clauses, clause]);
   }
 
   _QueryAst addOr(Iterable<_QueryAstNode> clauses) {
     return _QueryAst(
-      andClauses: andClauses,
-      orClauses: <_QueryAstNode>[...orClauses, ...clauses],
+      clauses: <_QueryAstNode>[
+        ...this.clauses,
+        _OrGroupNode(List<_QueryAstNode>.unmodifiable(clauses)),
+      ],
     );
   }
 
-  // Root OR blocks stay isolated from the default AND chain.
   JsonMap compile() {
-    final compiledAnd = _compileAndGroup(andClauses);
-    if (orClauses.isEmpty) {
-      return compiledAnd ?? <String, dynamic>{};
-    }
-
-    return <String, dynamic>{
-      r'$or': <JsonMap>[
-        if (compiledAnd != null) compiledAnd,
-        ...orClauses.map((clause) => clause.compile()),
-      ],
-    };
-  }
-
-  JsonMap? _compileAndGroup(List<_QueryAstNode> clauses) {
     if (clauses.isEmpty) {
-      return null;
+      return <String, dynamic>{};
     }
     if (clauses.length == 1) {
       return clauses.single.compile();
@@ -229,6 +209,19 @@ class _QueryAst {
       r'$and': clauses
           .map((clause) => clause.compile())
           .toList(growable: false),
+    };
+  }
+}
+
+class _OrGroupNode implements _QueryAstNode {
+  _OrGroupNode(this.clauses);
+
+  final List<_QueryAstNode> clauses;
+
+  @override
+  JsonMap compile() {
+    return <String, dynamic>{
+      r'$or': clauses.map((clause) => clause.compile()).toList(growable: false),
     };
   }
 }
