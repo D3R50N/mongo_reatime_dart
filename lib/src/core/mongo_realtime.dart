@@ -17,11 +17,9 @@ class MongoRealtime {
       webSocketService: _webSocketService,
     );
     watch = DbWatcher(queryManager: _queryManager);
-    _eventProcessor = RealtimeEventProcessor(
-      webSocketService: _webSocketService,
-      queryManager: _queryManager,
-      onEmitResult: _completeEmit,
-      onEmitError: _failEmit,
+    _messageSubscription = _webSocketService.messages.listen(_handleMessage);
+    _socketErrorSubscription = _webSocketService.errors.listen(
+      _queryManager.failPendingFetches,
     );
     _connectionEventSubscription = _webSocketService._connectionEvents.listen(
       _handleConnectionEvent,
@@ -90,7 +88,8 @@ class MongoRealtime {
   late final RealtimeCacheManager _cacheManager;
   late final RealtimeQueryManager _queryManager;
   late final DbWatcher watch;
-  late final RealtimeEventProcessor _eventProcessor;
+  late final StreamSubscription<JsonMap> _messageSubscription;
+  late final StreamSubscription<Object> _socketErrorSubscription;
   late final StreamSubscription<_RealtimeConnectionEvent>
   _connectionEventSubscription;
   Timer? _reconnectTimer;
@@ -217,10 +216,11 @@ class MongoRealtime {
     _disposed = true;
     _reconnectTimer?.cancel();
     await _connectionEventSubscription.cancel();
+    await _messageSubscription.cancel();
+    await _socketErrorSubscription.cancel();
     _failPendingEmits(
       StateError('MongoRealtime was disposed before emit completed.'),
     );
-    await _eventProcessor.dispose();
     await _queryManager.dispose();
     _cacheManager.clear();
     await _webSocketService.dispose();
@@ -232,6 +232,146 @@ class MongoRealtime {
     } on Object {
       // Connection failures are already routed to the printer and error stream.
     }
+  }
+
+  void _handleMessage(JsonMap message) {
+    final type = message['type']?.toString();
+    switch (type) {
+      case 'realtime:initial':
+        final queryId = message['queryId']?.toString();
+        if (queryId != null) {
+          _queryManager.applyInitial(queryId, _readDocuments(message));
+        }
+        return;
+      case 'realtime:insert':
+        final collection = message['collection']?.toString();
+        final document = _readDocument(message);
+        if (collection != null && document != null) {
+          _queryManager.applyInsert(collection, document);
+        }
+        return;
+      case 'realtime:update':
+        _handleUpdateMessage(message);
+        return;
+      case 'realtime:delete':
+        _handleDeleteMessage(message);
+        return;
+      case 'realtime:error':
+        _queryManager.propagateError(
+          Exception(
+            message['error']?.toString() ??
+                message['message']?.toString() ??
+                'MongoRealtime server error.',
+          ),
+          queryId: message['queryId']?.toString(),
+        );
+        return;
+      case 'realtime:emit:result':
+        final requestId = message['requestId']?.toString();
+        if (requestId != null) {
+          _completeEmit(requestId, message['data']);
+        }
+        return;
+      case 'realtime:emit:error':
+        final requestId = message['requestId']?.toString();
+        if (requestId != null) {
+          _failEmit(
+            requestId,
+            StateError(
+              message['error']?.toString() ??
+                  'MongoRealtime custom event failed.',
+            ),
+          );
+        }
+        return;
+      case 'realtime:db:change':
+        _handleDbChangeMessage(message);
+        return;
+    }
+  }
+
+  void _handleDbChangeMessage(JsonMap message) {
+    try {
+      final changeKey = message['key']!.toString();
+      final change = RealtimeDbChange.fromJson(message);
+      _queryManager.applyDbChange(changeKey, change);
+    } catch (_) {}
+  }
+
+  void _handleUpdateMessage(JsonMap message) {
+    final collection = message['collection']?.toString();
+    if (collection == null) {
+      return;
+    }
+
+    final current = _readDocument(message);
+    if (current != null) {
+      _queryManager.applyUpdate(
+        collection: collection,
+        previous: _readNamedDocument(message, 'before'),
+        current: current,
+      );
+      return;
+    }
+
+    final filter = _readNamedDocument(message, 'filter');
+    final update = _readNamedDocument(message, 'update');
+    if (filter != null && update != null) {
+      _queryManager.applyRemoteOperatorUpdate(
+        collection: collection,
+        filter: filter,
+        update: update,
+      );
+    }
+  }
+
+  void _handleDeleteMessage(JsonMap message) {
+    final collection = message['collection']?.toString();
+    if (collection == null) {
+      return;
+    }
+
+    final id =
+        message['documentId']?.toString() ??
+        message['id']?.toString() ??
+        _readDocument(message)?['_id']?.toString() ??
+        _readNamedDocument(message, 'filter')?['_id']?.toString();
+
+    if (id != null && id.isNotEmpty) {
+      _queryManager.applyDelete(collection: collection, id: id);
+      return;
+    }
+
+    final filter = _readNamedDocument(message, 'filter');
+    if (filter != null) {
+      _queryManager.applyDeleteByFilter(collection: collection, filter: filter);
+    }
+  }
+
+  List<JsonMap> _readDocuments(JsonMap message) {
+    final payload = message['documents'] ?? message['data'];
+    if (payload is! List<dynamic>) {
+      return const [];
+    }
+
+    return payload
+        .whereType<Map<dynamic, dynamic>>()
+        .map((document) => document.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  JsonMap? _readDocument(JsonMap message) {
+    return _readNamedDocument(message, 'document') ??
+        _readNamedDocument(message, 'data') ??
+        _readNamedDocument(message, 'after');
+  }
+
+  JsonMap? _readNamedDocument(JsonMap message, String key) {
+    final payload = message[key];
+    if (payload is Map<dynamic, dynamic>) {
+      return payload.cast<String, dynamic>();
+    }
+    return null;
   }
 
   void _handleConnectionEvent(_RealtimeConnectionEvent event) {

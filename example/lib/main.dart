@@ -126,7 +126,7 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
             const SizedBox(height: 24),
             Expanded(
               child: GridView.count(
-                crossAxisCount: MediaQuery.of(context).size.width > 860 ? 3 : 1,
+                crossAxisCount: MediaQuery.of(context).size.width > 660 ? 3 : 1,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 childAspectRatio: 1.05,

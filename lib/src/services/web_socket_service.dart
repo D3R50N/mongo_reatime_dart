@@ -4,7 +4,7 @@ class RealtimeWebSocketService {
   RealtimeWebSocketService({required String url, this.authData}) : _url = url;
 
   String _url;
-  RealtimeSocketConnection? _connection;
+  WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
   Future<void>? _connecting;
   bool _disposing = false;
@@ -18,7 +18,7 @@ class RealtimeWebSocketService {
       StreamController<_RealtimeConnectionEvent>.broadcast();
 
   String get url => _url;
-  bool get isConnected => _connection != null;
+  bool get isConnected => _channel != null;
   final Object? authData;
   Stream<JsonMap> get messages => _messageController.stream;
   Stream<Object> get errors => _errorController.stream;
@@ -26,12 +26,10 @@ class RealtimeWebSocketService {
       _connectionEventController.stream;
 
   Future<void> connect() async {
-    if (_connection != null) {
-      // _logInfo('WebSocket already connected to $_url.');
+    if (_channel != null) {
       return;
     }
     if (_connecting != null) {
-      // _logInfo('WebSocket connection already in progress for $_url.');
       return _connecting!;
     }
 
@@ -41,13 +39,13 @@ class RealtimeWebSocketService {
     _connecting = completer.future;
 
     try {
-      final connection = RealtimeSocketConnection.connect(
+      final channel = IOWebSocketChannel.connect(
         Uri.parse(_url),
-        authData,
+        headers: _buildHeaders(authData),
       );
-      _connection = connection;
+      _channel = channel;
       _connectionLossNotified = false;
-      _subscription = connection.stream.listen(
+      _subscription = channel.stream.listen(
         _handleIncoming,
         onError: _handleSocketError,
         onDone: _handleSocketDone,
@@ -59,7 +57,7 @@ class RealtimeWebSocketService {
       );
       completer.complete();
     } on Object catch (error, stackTrace) {
-      _connection = null;
+      _channel = null;
       _logError('WebSocket connection failed for $_url: $error');
       _connectionEventController.add(
         _RealtimeConnectionEvent(
@@ -86,20 +84,20 @@ class RealtimeWebSocketService {
 
   Future<void> send(JsonMap message) async {
     await connect();
-    await _connection!.add(jsonEncode(message));
+    _channel!.sink.add(jsonEncode(message));
   }
 
   Future<void> disconnect() async {
     _disposing = true;
-    final connection = _connection;
-    _connection = null;
+    final channel = _channel;
+    _channel = null;
 
     await _subscription?.cancel();
     _subscription = null;
 
-    if (connection != null) {
+    if (channel != null) {
       _logInfo('Disconnecting WebSocket from $_url...');
-      await connection.close();
+      await channel.sink.close();
     }
 
     _disposing = false;
@@ -130,13 +128,13 @@ class RealtimeWebSocketService {
   }
 
   void _handleSocketError(Object error, [StackTrace? stackTrace]) {
-    _connection = null;
+    _channel = null;
     _logError('WebSocket error on $_url: $error');
     _notifyConnectionLost(error);
   }
 
   void _handleSocketDone() {
-    _connection = null;
+    _channel = null;
     if (!_disposing) {
       _logError('WebSocket connection lost for $_url.');
       _notifyConnectionLost(
@@ -172,6 +170,29 @@ class RealtimeWebSocketService {
 
   void _logError(String message) {
     _Printer(_PrintType.error).write(message);
+  }
+
+  Map<String, Object> _buildHeaders(Object? authData) {
+    final encodedAuthData = _encodeAuthData(authData);
+    if (encodedAuthData == null) {
+      return const <String, Object>{};
+    }
+    return <String, Object>{'auth': encodedAuthData};
+  }
+
+  String? _encodeAuthData(Object? authData) {
+    if (authData == null) {
+      return null;
+    }
+    if (authData is Map) {
+      return jsonEncode(authData);
+    }
+    if (authData is Iterable) {
+      return jsonEncode({
+        for (var i = 0; i < authData.length; i++) '$i': authData.elementAt(i),
+      });
+    }
+    return authData.toString();
   }
 }
 

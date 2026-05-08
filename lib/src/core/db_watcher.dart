@@ -23,17 +23,14 @@ class DbWatcher {
     String? collection,
     String? docId,
     required RealtimeQueryManager queryManager,
-  })  : _queryManager = queryManager,
-        _collection = collection,
-        _docId = docId;
+  }) : _queryManager = queryManager,
+       _collection = collection,
+       _docId = docId;
 
-  DbWatcher copyWith({
-    String? collection,
-    String? docId,
-  }) {
+  DbWatcher copyWith({String? collection, String? docId}) {
     return DbWatcher(
-      collection: collection,
-      docId: docId,
+      collection: collection ?? _collection,
+      docId: docId ?? _docId,
       queryManager: _queryManager,
     );
   }

@@ -2,6 +2,7 @@
 
 ## 3.0.1
 
+- Simplified the internal realtime architecture by merging message handling into `MongoRealtime` and inlining socket connection management into `RealtimeWebSocketService`, removing the extra `RealtimeEventProcessor` and `RealtimeSocketConnection` layers.
 - Fixed `RealtimeQueryBuilder.or()` so each `or(...)` block is preserved as its own `$or` group inside the root `$and` chain instead of flattening all clauses into a single root-level `$or`.
 - Fixed `cache_manager` so it prevent duplicate entries in the cache when multiple queries with the same collection and filter are created. This prevents memory bloat and ensures consistent caching behavior across queries.
 

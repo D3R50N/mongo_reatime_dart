@@ -269,7 +269,7 @@ await collection.insert(
   - Returns `RealtimeCollectionReference<T>`.
 
 - **`RealtimeCollectionReference<T>`**:
-  - `where(field, ...)`: Add filter clause (supports `isEqualTo`, `isNotEqualTo`, `isGreaterThan`, `isGreaterOrEqualTo`, `isLessThan`, `isLessOrEqualTo`, `arrayContains`, `isIn`, `matches`).
+  - `where(field, ...)`: Add filter clause (supports `isEqualTo`, `isNotEqualTo`, `isGreaterThan`, `isGreaterOrEqualTo`, `isLowerThan`, `isLowerOrEqualTo`, `arrayContains`, `isIn`, `matches`).
   - `or(builder)`: Add OR clause.
   - `sort(field, descending?)`: Sort by field.
   - `limit(count)`: Limit results.
