@@ -97,11 +97,29 @@ class RealtimeCollectionReference<T> {
     return _client.insert(_name, document, optimistic: optimistic);
   }
 
-  Future<void> update(
-    JsonMap update, {
+  Future<void> update({
+    JsonMap? $set,
+    JsonMap? $unset,
+    JsonMap? $inc,
+    JsonMap? $push,
+    JsonMap? $pull,
+    JsonMap? $addToSet,
+    JsonMap? $rename,
+    JsonMap? additionalUpdate,
     JsonMap? filter,
     bool optimistic = false,
   }) {
+    final update = buildUpdateMap(
+      set: $set,
+      unset: $unset,
+      inc: $inc,
+      push: $push,
+      pull: $pull,
+      addToSet: $addToSet,
+      rename: $rename,
+      additionalUpdate: additionalUpdate,
+    );
+
     return _client.update(
       _name,
       update: update,

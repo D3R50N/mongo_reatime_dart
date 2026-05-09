@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:mongo_realtime/mongo_realtime.dart';
 
 void main() {
-  MongoRealtime.connect('http://localhost:3000');
+  MongoRealtime.connect('http://localhost:3000', authData: 'ok');
   runApp(const MongoRealTimeExampleApp());
 }
 
@@ -189,10 +189,14 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
   }
 
   Future<void> _birthdayForU1() {
-    return realtime.collection('users').doc(u1Id).update({
-      r'$inc': {'age': 1},
-      r'$addToSet': {'tags': 'birthday'},
-    }, optimistic: true);
+    return realtime
+        .collection('users')
+        .doc(u1Id)
+        .update(
+          $inc: {'age': 1},
+          $addToSet: {'tags': 'birthday'},
+          optimistic: true,
+        );
   }
 
   Future<void> _deleteLastUser() async {

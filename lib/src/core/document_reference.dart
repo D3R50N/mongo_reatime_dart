@@ -36,7 +36,27 @@ class RealtimeDocumentReference<T> {
     );
   }
 
-  Future<void> update(JsonMap update, {bool optimistic = false}) {
+  Future<void> update({
+    JsonMap? $set,
+    JsonMap? $unset,
+    JsonMap? $inc,
+    JsonMap? $push,
+    JsonMap? $pull,
+    JsonMap? $addToSet,
+    JsonMap? $rename,
+    JsonMap? additionalUpdate,
+    bool optimistic = false,
+  }) {
+    final update = buildUpdateMap(
+      set: $set,
+      unset: $unset,
+      inc: $inc,
+      push: $push,
+      pull: $pull,
+      addToSet: $addToSet,
+      rename: $rename,
+      additionalUpdate: additionalUpdate,
+    );
     return _client.update(
       _collection,
       update: update,

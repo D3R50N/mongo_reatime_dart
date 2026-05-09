@@ -4,6 +4,29 @@ bool isMongoOperatorUpdate(JsonMap update) {
   return update.keys.any((key) => key.startsWith(r'$'));
 }
 
+JsonMap buildUpdateMap({
+  JsonMap? set,
+  JsonMap? unset,
+  JsonMap? inc,
+  JsonMap? push,
+  JsonMap? pull,
+  JsonMap? addToSet,
+  JsonMap? rename,
+  JsonMap? additionalUpdate,
+}) {
+  final update = <String, dynamic>{};
+  if (set != null) update['\$set'] = set;
+  if (unset != null) update['\$unset'] = unset;
+  if (inc != null) update['\$inc'] = inc;
+  if (push != null) update['\$push'] = push;
+  if (pull != null) update['\$pull'] = pull;
+  if (addToSet != null) update['\$addToSet'] = addToSet;
+  if (rename != null) update['\$rename'] = rename;
+  if (additionalUpdate != null) update.addAll(additionalUpdate);
+
+  return update;
+}
+
 JsonMap applyMongoUpdate(JsonMap original, JsonMap update) {
   final working = deepCopyMap(original);
 
@@ -15,8 +38,9 @@ JsonMap applyMongoUpdate(JsonMap original, JsonMap update) {
   }
 
   for (final entry in update.entries) {
-    final payload = (entry.value as Map<dynamic, dynamic>? ?? const {})
-        .cast<String, dynamic>();
+    final payload =
+        (entry.value as Map<dynamic, dynamic>? ?? const {})
+            .cast<String, dynamic>();
 
     switch (entry.key) {
       case r'$set':
@@ -85,10 +109,7 @@ bool _shouldPull(Object? item, Object? condition) {
   if (condition is Map<dynamic, dynamic>) {
     final mapCondition = condition.cast<String, dynamic>();
     if (item is Map<dynamic, dynamic>) {
-      return matchesFilter(
-        item.cast<String, dynamic>(),
-        mapCondition,
-      );
+      return matchesFilter(item.cast<String, dynamic>(), mapCondition);
     }
   }
 

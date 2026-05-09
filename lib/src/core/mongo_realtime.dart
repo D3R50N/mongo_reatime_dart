@@ -155,6 +155,10 @@ class MongoRealtime {
     final updatePayload = deepCopyMap(update);
     final filterPayload = deepCopyMap(filter);
 
+    if (updatePayload.isEmpty) {
+      throw ArgumentError('Update payload cannot be empty.');
+    }
+
     await _webSocketService.send({
       'type': 'realtime:update',
       'collection': collection,

@@ -38,6 +38,36 @@ class RealtimeQueryBuilder<T> {
 
   JsonMap get _compiledFilter => _ast.compile();
 
+  Future<void> update({
+    JsonMap? $set,
+    JsonMap? $unset,
+    JsonMap? $inc,
+    JsonMap? $push,
+    JsonMap? $pull,
+    JsonMap? $addToSet,
+    JsonMap? $rename,
+    JsonMap? additionalUpdate,
+    bool optimistic = false,
+  }) {
+    final update = buildUpdateMap(
+      set: $set,
+      unset: $unset,
+      inc: $inc,
+      push: $push,
+      pull: $pull,
+      addToSet: $addToSet,
+      rename: $rename,
+      additionalUpdate: additionalUpdate,
+    );
+
+    return _client.update(
+      _collection,
+      update: update,
+      filter: definition.filter,
+      optimistic: optimistic,
+    );
+  }
+
   RealtimeQueryBuilder<T> where(
     String field, {
     Object? isEqualTo,
