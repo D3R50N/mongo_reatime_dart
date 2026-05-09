@@ -1,5 +1,9 @@
 part of '../../mongo_realtime.dart';
 
+/// Builds a comparator for sorting documents by specified field orders.
+///
+/// The [sort] map contains field names as keys and 1 (ascending) or -1
+/// (descending) as values.
 Comparator<JsonMap> buildSortComparator(Map<String, int> sort) {
   return (left, right) {
     for (final entry in sort.entries) {
@@ -15,6 +19,7 @@ Comparator<JsonMap> buildSortComparator(Map<String, int> sort) {
   };
 }
 
+/// Sorts documents and applies a limit if needed.
 List<JsonMap> sortAndLimit(
   Iterable<JsonMap> documents, {
   required Map<String, int> sort,

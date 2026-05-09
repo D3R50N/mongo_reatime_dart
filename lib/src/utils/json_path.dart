@@ -1,5 +1,9 @@
 part of '../../mongo_realtime.dart';
 
+/// Reads the value at [path] from a JSON document using dot notation.
+///
+/// Returns null if the path does not exist. Paths like 'user.name' will
+/// navigate through nested objects.
 Object? readPath(JsonMap json, String path) {
   if (path.isEmpty) {
     return json;
@@ -17,6 +21,10 @@ Object? readPath(JsonMap json, String path) {
   return current;
 }
 
+/// Sets the value at [path] in a JSON document using dot notation.
+///
+/// Creates intermediate objects as needed. Paths like 'user.profile.age'
+/// will create nested objects if they don't exist.
 void writePath(JsonMap json, String path, Object? value) {
   final segments = path.split('.');
   JsonMap current = json;

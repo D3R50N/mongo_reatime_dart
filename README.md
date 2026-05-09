@@ -174,9 +174,11 @@ await collection.insert({'name': 'John', 'age': 30});
 
 // Update
 await collection.update(
-  {'\$set': {'age': 31}},
+  $set: {'age': 31}
   filter: {'name': 'John'},
 );
+// or
+await collection.where('name', isEqualTo: 'John').update($set: {'age': 31});
 
 // Delete
 await collection.delete(filter: {'name': 'John'});
@@ -196,7 +198,7 @@ doc.stream().listen((user) {
 });
 
 // Update a specific document
-await doc.update({'\$set': {'age': 25}});
+await doc.update($set: {'age': 25});
 
 // Delete a specific document
 await doc.delete();

@@ -1,16 +1,14 @@
 part of '../../mongo_realtime.dart';
 
+/// A typed wrapper around a realtime document returned by MongoRealtime.
+///
+/// Contains the document [id], the raw JSON [data], and an optional parsed
+/// [value].
 class RealtimeDocument<T> {
-  RealtimeDocument._({
-    required this.id,
-    required JsonMap data,
-    this.value,
-  }) : data = Map.unmodifiable(data);
+  RealtimeDocument._({required this.id, required JsonMap data, this.value})
+    : data = Map.unmodifiable(data);
 
-  factory RealtimeDocument.fromJson(
-    JsonMap json, {
-    FromJson<T>? fromJson,
-  }) {
+  factory RealtimeDocument.fromJson(JsonMap json, {FromJson<T>? fromJson}) {
     final copied = deepCopyMap(json);
     final id = (copied['_id'] ?? '').toString();
 
@@ -25,11 +23,7 @@ class RealtimeDocument<T> {
       }
     }
 
-    return RealtimeDocument._(
-      id: id,
-      data: copied,
-      value: value,
-    );
+    return RealtimeDocument._(id: id, data: copied, value: value);
   }
 
   final String id;

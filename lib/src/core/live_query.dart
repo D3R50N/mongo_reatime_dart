@@ -1,5 +1,6 @@
 part of '../../mongo_realtime.dart';
 
+/// A live query subscription that maintains a stream of matching documents.
 class RealtimeLiveQuery {
   RealtimeLiveQuery(this.definition);
 

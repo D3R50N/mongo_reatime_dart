@@ -1,11 +1,15 @@
 part of '../../mongo_realtime.dart';
 
+/// Creates a deep copy of a JSON-style map.
+///
+/// This copies nested maps and lists recursively to preserve immutability.
 JsonMap deepCopyMap(Map<dynamic, dynamic> source) {
   return source.map<String, dynamic>(
     (key, value) => MapEntry(key.toString(), deepCopyJson(value)),
   );
 }
 
+/// Creates a deep copy of a JSON-compatible value.
 Object? deepCopyJson(Object? value) {
   if (value is Map<dynamic, dynamic>) {
     return deepCopyMap(value);
@@ -16,6 +20,7 @@ Object? deepCopyJson(Object? value) {
   return value;
 }
 
+/// Performs a deep equality comparison for JSON-style values.
 bool deepEquals(Object? left, Object? right) {
   if (identical(left, right)) {
     return true;
@@ -45,6 +50,9 @@ bool deepEquals(Object? left, Object? right) {
   return left == right;
 }
 
+/// Encodes an object to JSON with deterministic key ordering.
+///
+/// This is useful for stable hash generation and comparison of query payloads.
 String stableJsonEncode(Object? value) {
   if (value is Map) {
     final keys = value.keys.map((key) => key.toString()).toList()..sort();
@@ -60,19 +68,23 @@ String stableJsonEncode(Object? value) {
   return jsonEncode(value);
 }
 
+/// Encodes query payloads in a canonical form for deterministic comparison.
 String canonicalQueryJsonEncode(Object? value) {
   if (value is Map) {
     final keys = value.keys.map((key) => key.toString()).toList()..sort();
-    final encoded = keys.map((key) {
-      final child = value[key];
-      if (_isUnorderedQueryArrayKey(key) && child is List<dynamic>) {
-        final values =
-            child.map(canonicalQueryJsonEncode).toList(growable: true)..sort();
-        return '${jsonEncode(key)}:[${values.join(',')}]';
-      }
+    final encoded = keys
+        .map((key) {
+          final child = value[key];
+          if (_isUnorderedQueryArrayKey(key) && child is List<dynamic>) {
+            final values = child
+              .map(canonicalQueryJsonEncode)
+              .toList(growable: true)..sort();
+            return '${jsonEncode(key)}:[${values.join(',')}]';
+          }
 
-      return '${jsonEncode(key)}:${canonicalQueryJsonEncode(child)}';
-    }).join(',');
+          return '${jsonEncode(key)}:${canonicalQueryJsonEncode(child)}';
+        })
+        .join(',');
     return '{$encoded}';
   }
   if (value is List) {
@@ -82,6 +94,7 @@ String canonicalQueryJsonEncode(Object? value) {
   return jsonEncode(value);
 }
 
+/// Encodes a map into a JSON-like representation that preserves insertion order.
 String orderedMapJsonEncode(Map<String, dynamic> value) {
   final encoded = value.entries
       .map(
@@ -100,6 +113,7 @@ bool _isUnorderedQueryArrayKey(String key) {
       key == r'$nin';
 }
 
+/// Computes the FNV-1a hash for a string.
 String fnv1aHash(String input) {
   const fnvPrime = 0x01000193;
   var hash = 0x811C9DC5;

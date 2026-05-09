@@ -1,5 +1,9 @@
 part of '../../mongo_realtime.dart';
 
+/// Builder for realtime collection queries.
+///
+/// Use this builder to compose filters, sorting, and limits before fetching or
+/// subscribing to results.
 class RealtimeQueryBuilder<T> {
   RealtimeQueryBuilder({
     required MongoRealtime client,
@@ -38,6 +42,15 @@ class RealtimeQueryBuilder<T> {
 
   JsonMap get _compiledFilter => _ast.compile();
 
+  /// Performs an update on all documents matching the query filter using MongoDB update operators.
+  /// The update will be applied atomically on the server. If `optimistic` is true, the cache will be updated immediately with the expected changes, and then reconciled with the server response when it arrives. If `optimistic` is false, the cache will only be updated when the server confirms the update.
+  /// The `update` parameter should be a map containing MongoDB update operators like `$set`, `$unset`, `$inc`, `$push`, `$pull`, `$addToSet`, and `$rename`. For example:
+  /// ```dart
+  /// queryBuilder.update(
+  ///  $set: {'status': 'active'},
+  /// $inc: {'loginCount': 1},
+  /// );
+  /// ```
   Future<void> update({
     JsonMap? $set,
     JsonMap? $unset,
@@ -68,6 +81,16 @@ class RealtimeQueryBuilder<T> {
     );
   }
 
+  /// Adds a where clause to the query with the specified field and condition. The condition can be one of the following operators:
+  /// - `isEqualTo`: Matches documents where the field is equal to the specified value.
+  /// - `isNotEqualTo`: Matches documents where the field is not equal to the specified value.
+  /// - `isGreaterThan`: Matches documents where the field is greater than the specified value.
+  /// - `isGreaterOrEqualTo`: Matches documents where the field is greater than or equal to the specified value.
+  /// - `isLowerThan`: Matches documents where the field is less than the specified value.
+  /// - `isLowerOrEqualTo`: Matches documents where the field is less than or equal to the specified value.
+  /// - `arrayContains`: Matches documents where the field is an array that contains the specified value.
+  /// - `isIn`: Matches documents where the field's value is in the specified list of values.
+  /// - `matches`: Matches documents where the field matches the specified pattern. The pattern can be a string (for simple substring matching) or a regular expression (for more complex pattern matching).
   RealtimeQueryBuilder<T> where(
     String field, {
     Object? isEqualTo,
@@ -98,6 +121,35 @@ class RealtimeQueryBuilder<T> {
     );
   }
 
+  /// Adds an `$or` block to the query with the specified group of clauses. Each clause in the group is defined using the same operators as the `where` method. For example:
+  /// ```dart
+  /// queryBuilder.or((group) {
+  ///   group.where('status', isEqualTo: 'active');
+  ///   group.where('age', isGreaterThan: 30);
+  /// }).or((group) {
+  ///   group.where('role', isEqualTo: 'admin');
+  ///  group.where('lastLogin', isLowerThan: DateTime.now().subtract(Duration(days: 30)));
+  /// });
+  /// ```
+  /// This will produce a query filter equivalent to:
+  /// ```json
+  /// {
+  ///   "$and": [
+  ///     {
+  ///       "$or": [
+  ///         {"status": "active"},
+  ///         {"age": {"$gt": 30}}
+  ///       ]
+  ///     },
+  ///     {
+  ///       "$or": [
+  ///         {"role": "admin"},
+  ///         {"lastLogin": {"$lt": "Time value representing 30 days ago"}}
+  ///       ]
+  ///     }
+  ///  ]
+  /// }
+  /// ```
   RealtimeQueryBuilder<T> or(
     void Function(RealtimeQueryOrGroupBuilder group) build,
   ) {
@@ -117,16 +169,20 @@ class RealtimeQueryBuilder<T> {
     return _copyWith(sort: nextSort);
   }
 
+  /// Applies a sort order to the query using a field map.
   RealtimeQueryBuilder<T> orderBy(Map<String, int> sort) {
     return _copyWith(sort: LinkedHashMap<String, int>.from(sort));
   }
 
+  /// Limits the number of documents returned by the query.
   RealtimeQueryBuilder<T> take(int limit) {
     return _copyWith(limit: limit);
   }
 
+  /// Alias for [take], used to set the maximum number of documents.
   RealtimeQueryBuilder<T> limit(int limit) => take(limit);
 
+  /// The compiled query definition used for fetch and subscription operations.
   RealtimeQueryDefinition get definition => RealtimeQueryDefinition(
     collection: _collection,
     filter: _compiledFilter,
@@ -134,6 +190,7 @@ class RealtimeQueryBuilder<T> {
     limit: _limit,
   );
 
+  /// A realtime stream of documents matching the current query.
   Stream<List<RealtimeDocument<T>>> get stream {
     return _client._queryManager.streamQuery<T>(
       definition,
@@ -141,6 +198,7 @@ class RealtimeQueryBuilder<T> {
     );
   }
 
+  /// Fetches the current matching documents for this query once.
   Future<List<RealtimeDocument<T>>> find() {
     return _client._queryManager.fetchQuery<T>(definition, fromJson: _fromJson);
   }
@@ -161,11 +219,15 @@ class RealtimeQueryBuilder<T> {
   }
 }
 
+/// Helper builder for composing `$or` query groups.
 class RealtimeQueryOrGroupBuilder {
   RealtimeQueryOrGroupBuilder._();
 
   final List<_QueryAstNode> _clauses = <_QueryAstNode>[];
 
+  /// Adds a clause to the current `$or` group.
+  ///
+  /// Use the same operators as [RealtimeQueryBuilder.where].
   RealtimeQueryOrGroupBuilder where(
     String field, {
     Object? isEqualTo,

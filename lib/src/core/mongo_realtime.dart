@@ -1,5 +1,9 @@
 part of '../../mongo_realtime.dart';
 
+/// A client for MongoDB realtime updates over WebSocket.
+///
+/// Use this object to subscribe to query results, perform CRUD operations,
+/// and emit custom realtime events to the server.
 class MongoRealtime {
   MongoRealtime._({
     required String normalizedUrl,
@@ -26,6 +30,10 @@ class MongoRealtime {
     );
   }
 
+  /// Creates a new MongoRealtime client connected to the given WebSocket URL.
+  ///
+  /// The [url] is normalized before use, and an optional [authData] payload may
+  /// be sent as request headers during the WebSocket handshake.
   factory MongoRealtime(
     String url, {
     WarningHandler? warningHandler,
@@ -46,10 +54,17 @@ class MongoRealtime {
   static Object? _defaultAuthData;
   static WarningHandler? _defaultWarningHandlerOverride;
 
+  /// Returns the shared singleton instance created by the last call to
+  /// [MongoRealtime.connect] or created lazily with default settings.
   static MongoRealtime get instance {
     return _instance ??= MongoRealtime._createDefault();
   }
 
+  /// Connects to the specified WebSocket [url] and returns a shared client
+  /// instance.
+  ///
+  /// This method updates the default connection settings and disposes any
+  /// previous client instance once the new connection is established.
   static MongoRealtime connect(
     String url, {
     WarningHandler? warningHandler,
@@ -104,8 +119,13 @@ class MongoRealtime {
     _Printer._printWarning(message);
   }
 
+  /// Returns the WebSocket URL currently used by this client.
   String get url => _webSocketService.url;
 
+  /// Returns a reference to the named collection.
+  ///
+  /// The optional [fromJson] converter is used to map document JSON to
+  /// strongly typed values when queries are executed.
   RealtimeCollectionReference<T> collection<T>(
     String name, {
     FromJson<T>? fromJson,
@@ -117,6 +137,10 @@ class MongoRealtime {
     );
   }
 
+  /// Reconnects the client to the server.
+  ///
+  /// If an optional [url] is provided, the client reconnects to that URL;
+  /// otherwise it reuses the current WebSocket URL.
   Future<void> reconnect([String? url]) async {
     if (url != null) {
       final normalized = normalizeWebSocketUrl(url);
@@ -129,6 +153,11 @@ class MongoRealtime {
     await _queryManager.resubscribeActiveQueries();
   }
 
+  /// Inserts a new document into the specified [collection].
+  ///
+  /// If [optimistic] is true and the document contains an `_id`, the local cache
+  /// is updated immediately with the new document while awaiting server
+  /// confirmation.
   Future<void> insert(
     String collection,
     JsonMap document, {
@@ -146,6 +175,11 @@ class MongoRealtime {
     }
   }
 
+  /// Updates documents in [collection] matching [filter] using MongoDB update
+  /// operators from [update].
+  ///
+  /// Set [optimistic] to true to apply the update locally immediately while
+  /// waiting for the server response.
   Future<void> update(
     String collection, {
     required JsonMap update,
@@ -175,6 +209,10 @@ class MongoRealtime {
     }
   }
 
+  /// Deletes documents from [collection] matching [filter].
+  ///
+  /// If [optimistic] is true, the cache removes the matching documents
+  /// immediately while waiting for the server confirmation.
   Future<void> delete(
     String collection, {
     required JsonMap filter,
@@ -196,6 +234,8 @@ class MongoRealtime {
     }
   }
 
+  /// Emits a custom realtime [event] to the server with an optional
+  /// [payload], and awaits an optional response.
   Future<Object?> emit(String event, [Object? payload]) async {
     final requestId = _nextRequestId();
     final completer = Completer<Object?>();
@@ -216,6 +256,8 @@ class MongoRealtime {
     return completer.future;
   }
 
+  /// Disposes the client, closes all subscriptions, and disconnects the
+  /// underlying WebSocket connection.
   Future<void> dispose() async {
     _disposed = true;
     _reconnectTimer?.cancel();

@@ -1,5 +1,8 @@
 part of '../../mongo_realtime.dart';
 
+/// A handle for a named collection on a MongoRealtime server.
+///
+/// Use this reference to query and mutate documents in the collection.
 class RealtimeCollectionReference<T> {
   RealtimeCollectionReference({
     required MongoRealtime client,
@@ -15,8 +18,12 @@ class RealtimeCollectionReference<T> {
   final FromJson<T>? _fromJson;
   late final DbWatcher watch;
 
+  /// The collection name.
   String get name => _name;
 
+  /// Creates a query builder for this collection.
+  ///
+  /// Optionally provide [filter], [sort], and [limit] to initialize the query.
   RealtimeQueryBuilder<T> query({
     JsonMap? filter,
     Map<String, int>? sort,
@@ -32,6 +39,10 @@ class RealtimeCollectionReference<T> {
     );
   }
 
+  /// Adds a filter clause to the query for the specified [field].
+  ///
+  /// The returned query builder can be used to chain further filters,
+  /// sorting, and query execution.
   RealtimeQueryBuilder<T> where(
     String field, {
     Object? isEqualTo,
@@ -58,6 +69,7 @@ class RealtimeCollectionReference<T> {
     );
   }
 
+  /// Adds an `$or` clause to the query using the provided [build] callback.
   RealtimeQueryBuilder<T> or(
     void Function(RealtimeQueryOrGroupBuilder group) build,
   ) {
@@ -72,10 +84,12 @@ class RealtimeCollectionReference<T> {
 
   RealtimeQueryBuilder<T> limit(int limit) => query().limit(limit);
 
+  /// Subscribes to realtime updates for this collection.
   Stream<List<RealtimeDocument<T>>> get stream {
     return query().stream;
   }
 
+  /// Fetches the current documents matching the optional [filter], [sort], and [limit].
   Future<List<RealtimeDocument<T>>> find({
     JsonMap? filter,
     Map<String, int>? sort,
@@ -84,6 +98,7 @@ class RealtimeCollectionReference<T> {
     return query(filter: filter, sort: sort, limit: limit).find();
   }
 
+  /// Returns a reference to a single document by [id].
   RealtimeDocumentReference<T> doc(String id) {
     return RealtimeDocumentReference<T>(
       client: _client,
@@ -93,10 +108,16 @@ class RealtimeCollectionReference<T> {
     );
   }
 
+  /// Inserts a new [document] into the collection.
+  ///
+  /// Use [optimistic] to apply the change locally before server confirmation.
   Future<void> insert(JsonMap document, {bool optimistic = false}) {
     return _client.insert(_name, document, optimistic: optimistic);
   }
 
+  /// Performs an update on all documents matching the query filter using MongoDB update operators.
+  /// The update will be applied atomically on the server. If `optimistic` is true, the cache will be updated immediately with the expected changes, and then reconciled with the server response when it arrives. If `optimistic` is false, the cache will only be updated when the server confirms the update.
+  /// The `update` parameter should be a map containing MongoDB update operators like `$set`, `$unset`, `$inc`, `$push`, `$pull`, `$addToSet`, and `$rename`.
   Future<void> update({
     JsonMap? $set,
     JsonMap? $unset,
@@ -128,6 +149,7 @@ class RealtimeCollectionReference<T> {
     );
   }
 
+  /// Deletes documents from the collection matching [filter].
   Future<void> delete({JsonMap? filter, bool optimistic = false}) {
     return _client.delete(
       _name,

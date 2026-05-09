@@ -1,12 +1,23 @@
 part of '../../mongo_realtime.dart';
 
+/// Result of normalizing a WebSocket URL string.
 class RealtimeNormalizedUrl {
   const RealtimeNormalizedUrl({required this.url, this.warning});
 
+  /// The normalized WebSocket URL.
   final String url;
+
+  /// An optional warning message if normalization was required.
   final String? warning;
 }
 
+/// Normalizes a WebSocket URL string and returns a normalized result.
+///
+/// Handles various input formats:
+/// - Empty strings default to 'ws://localhost:3000'
+/// - http/https schemes are converted to ws/wss
+/// - Paths without a scheme get 'ws://' prepended
+/// - Invalid URIs are normalized with spaces removed
 RealtimeNormalizedUrl normalizeWebSocketUrl(String input) {
   final trimmed = input.trim();
   if (trimmed.isEmpty) {

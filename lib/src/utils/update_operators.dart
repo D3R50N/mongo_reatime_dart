@@ -1,9 +1,14 @@
 part of '../../mongo_realtime.dart';
 
+/// Checks if an update map contains MongoDB update operators.
 bool isMongoOperatorUpdate(JsonMap update) {
   return update.keys.any((key) => key.startsWith(r'$'));
 }
 
+/// Builds a MongoDB update map from named operator parameters.
+///
+/// For example, `buildUpdateMap(set: {'status': 'active'}, inc: {'count': 1})`
+/// creates `{'$set': {...}, '$inc': {...}}`.
 JsonMap buildUpdateMap({
   JsonMap? set,
   JsonMap? unset,
@@ -27,6 +32,10 @@ JsonMap buildUpdateMap({
   return update;
 }
 
+/// Applies a MongoDB update to a document copy and returns the result.
+///
+/// Handles MongoDB update operators like `$set`, `$inc`, `$push`, `$pull`,
+/// and others. The original document is not modified.
 JsonMap applyMongoUpdate(JsonMap original, JsonMap update) {
   final working = deepCopyMap(original);
 

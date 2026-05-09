@@ -1,5 +1,6 @@
 part of '../../mongo_realtime.dart';
 
+/// Checks if a document matches a MongoDB-style filter.
 bool matchesFilter(JsonMap document, JsonMap filter) {
   if (filter.isEmpty) {
     return true;
@@ -11,10 +12,12 @@ bool matchesFilter(JsonMap document, JsonMap filter) {
 
     if (key == r'$and') {
       final clauses = (condition as List<dynamic>? ?? const []);
-      if (!clauses.every((clause) => matchesFilter(
-            document,
-            (clause as Map<dynamic, dynamic>).cast<String, dynamic>(),
-          ))) {
+      if (!clauses.every(
+        (clause) => matchesFilter(
+          document,
+          (clause as Map<dynamic, dynamic>).cast<String, dynamic>(),
+        ),
+      )) {
         return false;
       }
       continue;
@@ -22,10 +25,12 @@ bool matchesFilter(JsonMap document, JsonMap filter) {
 
     if (key == r'$or') {
       final clauses = (condition as List<dynamic>? ?? const []);
-      if (!clauses.any((clause) => matchesFilter(
-            document,
-            (clause as Map<dynamic, dynamic>).cast<String, dynamic>(),
-          ))) {
+      if (!clauses.any(
+        (clause) => matchesFilter(
+          document,
+          (clause as Map<dynamic, dynamic>).cast<String, dynamic>(),
+        ),
+      )) {
         return false;
       }
       continue;
@@ -33,10 +38,12 @@ bool matchesFilter(JsonMap document, JsonMap filter) {
 
     if (key == r'$nor') {
       final clauses = (condition as List<dynamic>? ?? const []);
-      if (clauses.any((clause) => matchesFilter(
-            document,
-            (clause as Map<dynamic, dynamic>).cast<String, dynamic>(),
-          ))) {
+      if (clauses.any(
+        (clause) => matchesFilter(
+          document,
+          (clause as Map<dynamic, dynamic>).cast<String, dynamic>(),
+        ),
+      )) {
         return false;
       }
       continue;
@@ -56,11 +63,7 @@ bool _matchesCondition(Object? value, Object? condition) {
     final operators = condition.cast<String, dynamic>();
     if (operators.keys.any((key) => key.startsWith(r'$'))) {
       if (operators.containsKey(r'$regex') &&
-          !_matchesRegex(
-            value,
-            operators[r'$regex'],
-            operators[r'$options'],
-          )) {
+          !_matchesRegex(value, operators[r'$regex'], operators[r'$options'])) {
         return false;
       }
 
@@ -131,11 +134,7 @@ bool _applyOperator(Object? value, String operator, Object? operand) {
   }
 }
 
-bool _matchesRegex(
-  Object? value,
-  Object? pattern,
-  Object? options,
-) {
+bool _matchesRegex(Object? value, Object? pattern, Object? options) {
   if (value is! String || pattern == null) {
     return false;
   }

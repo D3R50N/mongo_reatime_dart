@@ -1,5 +1,10 @@
 part of '../../mongo_realtime.dart';
 
+/// Compares two JSON values for sorting purposes.
+///
+/// Follows MongoDB's comparison rules:
+/// - null < numbers < strings < booleans < DateTime
+/// - values of the same type are compared using their natural ordering
 int compareJsonValues(Object? left, Object? right) {
   if (identical(left, right)) {
     return 0;
