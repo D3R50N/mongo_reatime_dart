@@ -33,7 +33,7 @@ class RealtimeQueryManager {
 
       liveQuery.listenerCount += 1;
       if (liveQuery.listenerCount == 1) {
-        unawaited(_subscribe(liveQuery));
+        unawaited(_subscribeSafely(liveQuery));
       }
 
       if (liveQuery.hasSnapshot) {
@@ -106,7 +106,7 @@ class RealtimeQueryManager {
   Future<void> resubscribeActiveQueries() async {
     for (final liveQuery in _queries.values) {
       if (liveQuery.listenerCount > 0) {
-        await _subscribe(liveQuery);
+        await _subscribeSafely(liveQuery);
       }
     }
   }
@@ -302,6 +302,16 @@ class RealtimeQueryManager {
     return _webSocketService.send(
       liveQuery.definition.toSubscriptionMessage('realtime:subscribe'),
     );
+  }
+
+  Future<void> _subscribeSafely(RealtimeLiveQuery liveQuery) async {
+    try {
+      await _subscribe(liveQuery);
+    } on Object {
+      // Connection failures are handled by the websocket service and
+      // reconnect loop. Swallow here to avoid unhandled async exceptions
+      // from fire-and-forget subscription attempts.
+    }
   }
 
   Future<void> _unsubscribe(RealtimeLiveQuery liveQuery) {

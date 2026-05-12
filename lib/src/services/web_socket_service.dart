@@ -33,16 +33,23 @@ class RealtimeWebSocketService {
       return _connecting!;
     }
 
-    _logInfo('Connecting WebSocket to $_url...');
+    _connecting = _connectInternal();
+    try {
+      await _connecting!;
+    } finally {
+      _connecting = null;
+    }
+  }
 
-    final completer = Completer<void>();
-    _connecting = completer.future;
+  Future<void> _connectInternal() async {
+    _logInfo('Connecting WebSocket to $_url...');
 
     try {
       final channel = IOWebSocketChannel.connect(
         Uri.parse(_url),
         headers: _buildHeaders(authData),
       );
+      await channel.ready;
       _channel = channel;
       _connectionLossNotified = false;
       _subscription = channel.stream.listen(
@@ -55,9 +62,10 @@ class RealtimeWebSocketService {
       _connectionEventController.add(
         const _RealtimeConnectionEvent(_RealtimeConnectionEventType.connected),
       );
-      completer.complete();
-    } on Object catch (error, stackTrace) {
+    } on Object catch (error) {
       _channel = null;
+      await _subscription?.cancel();
+      _subscription = null;
       _logError('WebSocket connection failed for $_url: $error');
       _connectionEventController.add(
         _RealtimeConnectionEvent(
@@ -65,10 +73,7 @@ class RealtimeWebSocketService {
           error: error,
         ),
       );
-      completer.completeError(error, stackTrace);
       rethrow;
-    } finally {
-      _connecting = null;
     }
   }
 

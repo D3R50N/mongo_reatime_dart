@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:mongo_realtime/mongo_realtime.dart';
 
 void main() {
-  MongoRealtime.connect('http://localhost:3000', authData: 'ok');
+  MongoRealtime.connect('http://localhost:3000/ws', authData: 'ok');
   runApp(const MongoRealTimeExampleApp());
 }
 

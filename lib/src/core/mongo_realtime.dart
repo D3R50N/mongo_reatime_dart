@@ -429,7 +429,7 @@ class MongoRealtime {
 
         if (_shouldResubscribeAfterReconnect) {
           _shouldResubscribeAfterReconnect = false;
-          unawaited(_queryManager.resubscribeActiveQueries());
+          unawaited(_resubscribeAfterReconnect());
         }
         return;
       case _RealtimeConnectionEventType.disconnected:
@@ -474,6 +474,17 @@ class MongoRealtime {
       }
     } finally {
       _reconnectInProgress = false;
+    }
+  }
+
+  Future<void> _resubscribeAfterReconnect() async {
+    try {
+      await _queryManager.resubscribeActiveQueries();
+    } on Object {
+      if (!_disposed) {
+        _shouldResubscribeAfterReconnect = true;
+        _scheduleReconnect();
+      }
     }
   }
 
