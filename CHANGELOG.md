@@ -7,6 +7,7 @@
 - Fixed `cache_manager` so it prevent duplicate entries in the cache when multiple queries with the same collection and filter are created. This prevents memory bloat and ensures consistent caching behavior across queries.
 - Added `update` method to `RealtimeQueryBuilder` for performing updates on documents matching the query filter
 - Updated every `update` method to support MongoDB update operators like `$set`, `$unset`, `$inc`, `$push`, `$pull`, `$addToSet`, and `$rename` for more flexible updates.
+- Added `streamWithValue` method for streaming parsed documents directly instead of raw change events.
 
 ## 3.0.0 (Breaking Changes)
 

@@ -33,6 +33,26 @@ class RealtimeDocumentReference<T> {
     );
   }
 
+  /// A realtime stream that emits the typed document value when it changes.
+  Stream<T?> get streamWithValue {
+    return stream.map((document) {
+      if (document == null) {
+        return null;
+      }
+
+      final value = document.value;
+      if (value != null) {
+        return value;
+      }
+
+      throw StateError(
+        'MongoRealtime could not resolve a value of type $T for document '
+        '${document.id.isEmpty ? document.data : document.id}. '
+        'Provide a fromJson converter or use stream to access raw documents.',
+      );
+    });
+  }
+
   /// Fetches the current state of the document once.
   Future<RealtimeDocument<T>?> find() {
     return _client._queryManager.fetchDocument<T>(

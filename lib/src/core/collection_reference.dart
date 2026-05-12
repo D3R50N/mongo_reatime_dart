@@ -89,6 +89,11 @@ class RealtimeCollectionReference<T> {
     return query().stream;
   }
 
+  /// Subscribes to realtime updates for typed collection values.
+  Stream<List<T>> get streamWithValue {
+    return query().streamWithValue;
+  }
+
   /// Fetches the current documents matching the optional [filter], [sort], and [limit].
   Future<List<RealtimeDocument<T>>> find({
     JsonMap? filter,

@@ -198,6 +198,14 @@ class RealtimeQueryBuilder<T> {
     );
   }
 
+  /// A realtime stream of typed values matching the current query.
+  Stream<List<T>> get streamWithValue {
+    return stream.map(
+      (documents) =>
+          documents.map((document) => _requireDocumentValue(document)).toList(),
+    );
+  }
+
   /// Fetches the current matching documents for this query once.
   Future<List<RealtimeDocument<T>>> find() {
     return _client._queryManager.fetchQuery<T>(definition, fromJson: _fromJson);
@@ -215,6 +223,19 @@ class RealtimeQueryBuilder<T> {
       ast: ast ?? _ast,
       sort: sort ?? _sort,
       limit: limit ?? _limit,
+    );
+  }
+
+  T _requireDocumentValue(RealtimeDocument<T> document) {
+    final value = document.value;
+    if (value != null) {
+      return value;
+    }
+
+    throw StateError(
+      'MongoRealtime could not resolve a value of type $T for document '
+      '${document.id.isEmpty ? document.data : document.id}. '
+      'Provide a fromJson converter or use stream to access raw documents.',
     );
   }
 }
