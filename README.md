@@ -126,6 +126,17 @@ realtime.collection('users')
     print('Active users: $documents');
   });
 
+// Stream typed values directly
+realtime.collection<User>(
+  'users',
+  fromJson: (json) => User.fromJson(json), // required or else streamWithValue will throw a state error
+)
+  .where('status', isEqualTo: 'active')
+  .streamWithValue
+  .listen((users) {
+    print('Active user names: ${users.map((user) => user.name).toList()}');
+  });
+
 // `or` queries
 // All clauses inside `or` builder are combined with OR, and the result is combined with the rest of the query with AND
 realtime.collection('users')
@@ -162,6 +173,14 @@ final users = await realtime.collection<User>('users',
 users.forEach((doc) {
   print('${doc.value?.name} (${doc.value?.age})');
 });
+
+// Or listen to typed values directly
+realtime.collection<User>(
+  'users',
+  fromJson: (json) => User.fromJson(json),
+).streamWithValue.listen((users) {
+  print(users.map((user) => user.name).toList());
+});
 ```
 
 #### Insert, update, delete
@@ -193,8 +212,16 @@ final doc = realtime.collection('users').doc('user_123');
 final user = await doc.find();
 
 // Listen to changes on a specific document
-doc.stream().listen((user) {
+doc.stream.listen((user) {
   print('User updated: $user');
+});
+
+// Listen to the typed value of a specific document
+realtime.collection<User>(
+  'users',
+  fromJson: (json) => User.fromJson(json),
+).doc('user_123').streamWithValue.listen((user) {
+  print('Typed user updated: ${user?.name}');
 });
 
 // Update a specific document
